@@ -3,8 +3,6 @@ from tkinter import messagebox, ttk
 import csv
 import json
 import os
-import matplotlib.pyplot as plt
-from fpdf import FPDF
 from datetime import datetime
 
 # --- FILE PATHS ---
@@ -15,8 +13,8 @@ SETTINGS_FILE = "settings.json"
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.10.2 (Pre-Alpha)")
-        self.root.geometry("700x900")
+        self.root.title("Aquarium Commander Pro v0.10.3 (Pre-Alpha)")
+        self.root.geometry("750x900")
 
         self.load_settings()
         
@@ -33,6 +31,7 @@ class AquariumCommanderPro:
             "ESV B-Ionic Cal (Part 2)": 20.0,
             "Red Sea Foundation A (Cal)": 2.0,
             "Red Sea Foundation B (Alk)": 0.1,
+            "Fritz RPM Liquid Alk": 0.6,
             "BRC Pharma Soda Ash": 0.5
         }
 
@@ -64,18 +63,16 @@ class AquariumCommanderPro:
         frame = ttk.Frame(self.calc_tab, padding="20")
         frame.pack(fill="both", expand=True)
 
-        # 1. DEFINE VARIABLES FIRST (Crucial fix for AttributeError)
         self.param_var = tk.StringVar(value="Alkalinity")
         self.unit_var = tk.StringVar(value="dKH")
         self.brand_var = tk.StringVar(value="Custom (Manual)")
 
-        # 2. BUILD UI
         tk.Label(frame, text=f"Tank: {self.settings['tank_name']}", font=("Arial", 10, "italic")).grid(row=0, column=0, columnspan=2)
         tk.Label(frame, text="Chemical Adjuster", font=("Arial", 16, "bold")).grid(row=1, column=0, columnspan=2, pady=10)
 
-        # Gauge Canvas
-        self.gauge_canvas = tk.Canvas(frame, width=400, height=50, bg="#f0f0f0", highlightthickness=0)
-        self.gauge_canvas.grid(row=2, column=0, columnspan=2, pady=10)
+        # Gauge Canvas (Widened to 500 to prevent cutoff)
+        self.gauge_canvas = tk.Canvas(frame, width=500, height=60, bg="#f0f0f0", highlightthickness=0)
+        self.gauge_canvas.grid(row=2, column=0, columnspan=2, pady=15)
 
         tk.Label(frame, text="Parameter:").grid(row=3, column=0, sticky="w")
         self.param_menu = ttk.Combobox(frame, textvariable=self.param_var, values=list(self.ranges.keys()), state="readonly")
@@ -86,10 +83,12 @@ class AquariumCommanderPro:
         self.curr_ent = tk.Entry(frame)
         self.curr_ent.grid(row=4, column=1, pady=5, sticky="ew")
         self.curr_ent.bind("<KeyRelease>", self.update_gauge_live)
+        self.curr_ent.bind("<FocusOut>", self.smart_unit_check)
 
         tk.Label(frame, text="Unit:").grid(row=5, column=0, sticky="w")
         self.unit_menu = ttk.Combobox(frame, textvariable=self.unit_var, state="readonly")
         self.unit_menu.grid(row=5, column=1, pady=5, sticky="ew")
+        self.unit_menu.bind("<<ComboboxSelected>>", self.sync_target_unit)
 
         tk.Label(frame, text="Target Level:").grid(row=6, column=0, sticky="w")
         self.targ_ent = tk.Entry(frame)
@@ -109,15 +108,15 @@ class AquariumCommanderPro:
         self.res_lbl = tk.Label(frame, text="", font=("Consolas", 11, "bold"), wraplength=450)
         self.res_lbl.grid(row=10, column=0, columnspan=2)
 
-        # 3. INITIAL SETUP
         self.update_units_and_presets()
         self.draw_gauge(0)
 
     def draw_gauge(self, value):
         self.gauge_canvas.delete("all")
-        # Draw background zones
+        # Shift everything 50 pixels right to prevent cutoff
+        offset = 50
         colors = ["#e74c3c", "#f1c40f", "#2ecc71", "#f1c40f", "#e74c3c"]
-        x_start = 0
+        x_start = offset
         for color in colors:
             self.gauge_canvas.create_rectangle(x_start, 10, x_start + 80, 35, fill=color, outline="")
             x_start += 80
@@ -125,20 +124,49 @@ class AquariumCommanderPro:
         param = self.param_var.get()
         unit = self.unit_var.get()
         
-        # Adjust value for visual scale
+        # Math for normalization
         adj_value = value / 17.86 if param == "Alkalinity" and unit == "ppm" else value
-        
         r_list = self.ranges[param]["range"]
         min_v, max_v = r_list[0], r_list[5]
         
+        # Scale to 400 pixels + offset
         if max_v > min_v:
             pos = ((adj_value - min_v) / (max_v - min_v)) * 400
         else:
             pos = 0
-        pos = max(0, min(400, pos))
+        pos = max(0, min(400, pos)) + offset
         
         self.gauge_canvas.create_line(pos, 5, pos, 40, fill="black", width=3)
-        self.gauge_canvas.create_text(pos, 45, text=f"Input: {value}", font=("Arial", 8, "bold"))
+        self.gauge_canvas.create_text(pos, 50, text=f"{value} {unit}", font=("Arial", 9, "bold"))
+
+    def sync_target_unit(self, event=None):
+        param = self.param_var.get()
+        unit = self.unit_var.get()
+        base_targ = self.ranges[param]["target"]
+        
+        # Link Target to Unit Selection
+        if param == "Alkalinity" and unit == "ppm":
+            new_targ = round(base_targ * 17.86, 1)
+        else:
+            new_targ = base_targ
+            
+        self.targ_ent.delete(0, tk.END)
+        self.targ_ent.insert(0, str(new_targ))
+        
+        # Refresh gauge if value exists
+        try:
+            val = float(self.curr_ent.get())
+            self.draw_gauge(val)
+        except: pass
+
+    def smart_unit_check(self, event=None):
+        try:
+            val = float(self.curr_ent.get())
+            if self.param_var.get() == "Alkalinity" and self.unit_var.get() == "dKH" and val > 20:
+                if messagebox.askyesno("Unit Suggestion", f"{val} looks like PPM. Switch units and targets?"):
+                    self.unit_var.set("ppm")
+                    self.sync_target_unit()
+        except: pass
 
     def update_gauge_live(self, event=None):
         try:
@@ -151,8 +179,7 @@ class AquariumCommanderPro:
         u_list = self.ranges[p]["units"]
         self.unit_menu.config(values=u_list)
         self.unit_menu.set(u_list[0])
-        self.targ_ent.delete(0, tk.END)
-        self.targ_ent.insert(0, str(self.ranges[p]["target"]))
+        self.sync_target_unit()
 
     def apply_brand(self, event=None):
         s = self.brands[self.brand_var.get()]
@@ -160,21 +187,19 @@ class AquariumCommanderPro:
             self.strength_ent.delete(0, tk.END)
             self.strength_ent.insert(0, str(s))
 
+    # --- [Calculations, Maintenance, History, Settings Tabs same as 0.10.2] ---
     def perform_calculation(self):
         try:
             curr = float(self.curr_ent.get())
             targ = float(self.targ_ent.get())
             strength = float(self.strength_ent.get())
             vol = float(self.settings["volume"])
-            
             diff = targ - curr
             if diff <= 0:
-                self.res_lbl.config(text="Status: Optimal. No dose required.", fg="#27ae60")
+                self.res_lbl.config(text="Optimal. No dose needed.", fg="#27ae60")
                 return
-
             total_ml = (diff * vol) / strength
             self.res_lbl.config(text=f"DOSE: {total_ml:.1f} mL Total\nTarget: {targ} | Rise: +{diff:.2f}", fg="#2980b9")
-            
             if messagebox.askyesno("Log", "Log this dose?"):
                 self.save_to_csv("Dose", self.param_var.get(), total_ml)
         except: messagebox.showerror("Error", "Check numeric inputs.")
@@ -183,11 +208,10 @@ class AquariumCommanderPro:
         frame = ttk.Frame(self.maint_tab, padding="20")
         frame.pack(fill="both")
         tk.Label(frame, text="Maintenance Log", font=("Arial", 14, "bold")).pack(pady=10)
-        tasks = ["Filter Socks", "RO/DI Carbon", "Skimmer Cup", "Wavemaker Soak"]
-        for task in tasks:
+        for t in ["Filter Socks", "RO/DI Carbon", "Skimmer Cup", "Wavemaker Soak"]:
             f = ttk.Frame(frame); f.pack(fill="x", pady=5)
-            tk.Label(f, text=task, width=20, anchor="w").pack(side="left")
-            tk.Button(f, text="Mark Done", command=lambda t=task: self.log_maint(t)).pack(side="right")
+            tk.Label(f, text=t, width=20, anchor="w").pack(side="left")
+            tk.Button(f, text="Mark Done", command=lambda x=t: self.log_maint(x)).pack(side="right")
 
     def log_maint(self, t):
         with open(MAINT_FILE, "a", newline='') as f:
@@ -199,8 +223,7 @@ class AquariumCommanderPro:
         frame.pack(fill="both", expand=True)
         tk.Button(frame, text="Refresh History", command=self.refresh_logs).pack(pady=5)
         self.log_box = tk.Text(frame, height=20, width=70, font=("Consolas", 9), state="disabled")
-        self.log_box.pack(pady=10)
-        self.refresh_logs()
+        self.log_box.pack(pady=10); self.refresh_logs()
 
     def refresh_logs(self):
         if os.path.exists(LOG_FILE):
