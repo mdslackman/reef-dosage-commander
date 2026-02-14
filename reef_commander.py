@@ -50,7 +50,7 @@ class AquariumCommanderPro:
     def build_calc_tab(self):
         f = ttk.Frame(self.calc_tab, padding="20"); f.pack(fill="both", expand=True)
         
-        # --- LIVE PH METER (Visual Display) ---
+        # --- LIVE PH METER ---
         ph_frame = tk.Frame(f, bg="#2c3e50", pady=10)
         ph_frame.grid(row=0, columnspan=3, sticky="ew", pady=(0, 20))
         tk.Label(ph_frame, text="LIVE SYSTEM pH", fg="white", bg="#2c3e50", font=("Arial", 10)).pack()
@@ -108,12 +108,10 @@ class AquariumCommanderPro:
         d = datetime.now().strftime("%Y-%m-%d %H:%M")
         logged = False
         data = {"Alk": self.m_alk.get(), "Cal": self.m_cal.get(), "Mag": self.m_mag.get(), "pH": self.live_ph.get()}
-        
         for name, val in data.items():
             if val:
                 self.save_to_csv(d, "Test", name, val)
                 logged = True
-        
         if logged:
             messagebox.showinfo("Success", "Parameters logged.")
             for ent in [self.m_alk, self.m_cal, self.m_mag]: ent.delete(0, tk.END)
@@ -138,7 +136,7 @@ class AquariumCommanderPro:
             curr, targ = float(self.curr_ent.get()), float(self.targ_ent.get())
             strength = self.ranges[p]["brands"][self.b_var.get()]
             
-            # 71 ppm vs 8.5 dKH Detection
+            # Detect PPM for Alkalinity (e.g., 71 ppm)
             is_ppm = False
             if p == "Alkalinity" and curr > 20:
                 strength *= 17.86
@@ -153,13 +151,12 @@ class AquariumCommanderPro:
             
             days = max(1, int(diff / limit) + (1 if diff % limit > 0 else 0))
             
-            # pH Safety Override
+            # pH Safety Logic
             ph_val = float(self.live_ph.get())
             if ph_val >= 8.45: days = max(days, 6)
             
             msg = f"TOTAL DOSE: {total_ml:.1f} mL\nDaily: {total_ml/days:.1f} mL over {days} days"
             if ph_val >= 8.45: msg += f"\n\n⚠️ HIGH pH DETECTED: {ph_val}\nSlowing dose to protect system."
-            
             self.res_lbl.config(text=msg, fg="#c0392b" if ph_val >= 8.45 or days > 1 else "#2980b9")
         except: messagebox.showerror("Error", "Check numeric values.")
 
