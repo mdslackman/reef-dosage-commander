@@ -11,7 +11,7 @@ class AquariumCommanderPro:
         self.root.title("Aquarium Commander Pro v0.13.1")
         self.root.geometry("1200x1000")
         
-        # Financial Data & Pricing
+        # Product & Pricing Data
         self.prices = {
             "Fritz RPM Liquid Alkalinity": 23.99,
             "ESV B-Ionic Alk (Part 1)": 24.92,
@@ -19,7 +19,7 @@ class AquariumCommanderPro:
             "Fritz RPM Liquid Magnesium": 38.49
         }
         
-        # FIX: Explicitly convert dict_keys to a list for indexing/slicing
+        # THE FIX: Convert dict_keys to a list before slicing
         price_keys = list(self.prices.keys())
         
         self.zones = {
@@ -41,7 +41,7 @@ class AquariumCommanderPro:
         self.live_ph = tk.StringVar(value="")
         self.vol_var = tk.StringVar(value="") 
         
-        # High Visibility Styling
+        # High-Visibility Styling
         self.style = ttk.Style()
         self.style.configure('TLabel', font=('Arial', 11))
         self.style.configure('TButton', font=('Arial', 11, 'bold'))
@@ -115,7 +115,7 @@ class AquariumCommanderPro:
             "• ALKALINITY: Mix 2 cups (400g) Soda Ash into 1 Gal RO/DI.\n"
             "• CALCIUM: Mix 2.5 cups (500g) Calcium Chloride into 1 Gal RO/DI.\n"
             "• MAGNESIUM: Mix 5 cups (1000g) Mag Chloride/Sulfate into 1 Gal RO/DI.\n\n"
-            "Note: Use a scale for best accuracy. Dissolve fully before use."
+            "Note: Always add powder to water, not water to powder. Dissolve fully."
         )
         tk.Label(f, text=guide, font=("Courier New", 12), justify="left", relief="ridge", padx=20, pady=20, bg="#fdfdfd").pack(fill="x")
 
