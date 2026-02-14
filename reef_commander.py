@@ -65,7 +65,6 @@ class AquariumCommanderPro:
 
         tk.Label(f, text="Current Level:").grid(row=3, column=0, sticky="w")
         self.curr_ent = tk.Entry(f); self.curr_ent.grid(row=3, column=1, pady=5, sticky="ew")
-        tk.Label(f, text="(detects dKH/ppm)").grid(row=3, column=2, padx=5)
         
         tk.Label(f, text="Target Level:").grid(row=4, column=0, sticky="w")
         self.targ_ent = tk.Entry(f); self.targ_ent.grid(row=4, column=1, pady=5, sticky="ew")
@@ -107,20 +106,15 @@ class AquariumCommanderPro:
     def save_maint(self):
         d = datetime.now().strftime("%Y-%m-%d %H:%M")
         logged = False
-        data = [self.m_alk.get(), self.m_cal.get(), self.m_mag.get()]
-        names = ["Alk", "Cal", "Mag"]
+        data = {"Alk": self.m_alk.get(), "Cal": self.m_cal.get(), "Mag": self.m_mag.get(), "pH": self.live_ph.get()}
         
-        for name, val in zip(names, data):
+        for name, val in data.items():
             if val:
                 self.save_to_csv(d, "Test", name, val)
                 logged = True
         
-        if self.live_ph.get():
-            self.save_to_csv(d, "Test", "pH", self.live_ph.get())
-            logged = True
-            
         if logged:
-            messagebox.showinfo("Success", "Parameters logged with timestamp.")
+            messagebox.showinfo("Success", "Parameters logged.")
             for ent in [self.m_alk, self.m_cal, self.m_mag]: ent.delete(0, tk.END)
 
     def save_settings(self):
@@ -128,7 +122,7 @@ class AquariumCommanderPro:
             self.settings["volume"] = float(self.vol_ent.get())
             self.settings["last_ph"] = float(self.live_ph.get())
             with open(SETTINGS_FILE, "w") as f: json.dump(self.settings, f)
-            messagebox.showinfo("Success", "Volume updated.")
+            messagebox.showinfo("Success", "Settings updated.")
         except: messagebox.showerror("Error", "Invalid volume.")
 
     def update_param_selection(self, e=None):
@@ -143,13 +137,14 @@ class AquariumCommanderPro:
             curr, targ = float(self.curr_ent.get()), float(self.targ_ent.get())
             strength = self.ranges[p]["brands"][self.b_var.get()]
             
+            # Auto-detect PPM for Alkalinity
             is_ppm = False
             if p == "Alkalinity" and curr > 20:
                 strength *= 17.86
                 is_ppm = True
             
             diff = targ - curr
-            if diff <= 0: self.res_lbl.config(text="Level is optimal.", fg="green"); return
+            if diff <= 0: self.res_lbl.config(text="Status: Optimal.", fg="green"); return
             
             total_ml = (diff * vol) / strength
             limit = self.safety_limits[p]
@@ -160,14 +155,11 @@ class AquariumCommanderPro:
             ph_val = float(self.live_ph.get())
             if ph_val >= 8.45: days = max(days, 6)
             
-            daily_ml = total_ml / days
-            msg = f"TOTAL DOSE: {total_ml:.1f} mL\nDaily: {daily_ml:.1f} mL over {days} days"
-            
-            if ph_val >= 8.45:
-                msg += f"\n\n⚠️ HIGH pH WARNING: {ph_val}\nDose slowed to prevent shock."
+            msg = f"TOTAL DOSE: {total_ml:.1f} mL\nDaily: {total_ml/days:.1f} mL over {days} days"
+            if ph_val >= 8.45: msg += f"\n\n⚠️ HIGH pH DETECTED: {ph_val}\nSlowing dose to protect system."
             
             self.res_lbl.config(text=msg, fg="#c0392b" if ph_val >= 8.45 or days > 1 else "#2980b9")
-        except: messagebox.showerror("Error", "Invalid numbers.")
+        except: messagebox.showerror("Error", "Invalid numeric values.")
 
     def save_to_csv(self, date, type, param, val):
         with open(LOG_FILE, "a", newline='') as f:
@@ -178,7 +170,7 @@ class AquariumCommanderPro:
         f = ttk.Frame(self.log_tab, padding="20"); f.pack(fill="both", expand=True)
         self.txt = tk.Text(f, height=20, state="disabled", font=("Consolas", 10))
         self.txt.pack(fill="both", expand=True)
-        tk.Button(f, text="REFRESH LOGS", command=self.refresh_logs).pack(pady=5)
+        tk.Button(f, text="REFRESH HISTORY", command=self.refresh_logs).pack(pady=5)
         self.refresh_logs()
 
     def refresh_logs(self):
