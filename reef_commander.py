@@ -1,73 +1,118 @@
 import math
+import os
+import csv
+from datetime import datetime
+
+# --- FILE SETUP ---
+LOG_FILE = "aquarium_data.csv"
 
 def get_input(prompt, is_float=True):
     val = input(prompt)
-    if not val: return None
-    return float(val) if is_float else val
+    if not val or val.lower() == 'skip': return None
+    try:
+        return float(val) if is_float else val
+    except ValueError:
+        print("Invalid number. Press Enter to skip.")
+        return get_input(prompt, is_float)
+
+def get_last_test(param):
+    if not os.path.exists(LOG_FILE): return None
+    try:
+        with open(LOG_FILE, "r") as f:
+            reader = list(csv.reader(f))
+            for row in reversed(reader):
+                if row[2] == "Test" and row[3] == param:
+                    return float(row[4])
+    except: return None
+    return None
+
+def run_safety_suite(name, current, target, ph):
+    print("\n--- SAFETY ANALYSIS ---")
+    warnings = []
+    
+    if name == "Alkalinity" and ph and ph >= 8.35:
+        warnings.append(f"[!] HIGH pH ALERT: Current pH {ph} is elevated. Dosing Alkalinity now may cause precipitation.")
+
+    last_mag = get_last_test("Magnesium")
+    if name in ["Alkalinity", "Calcium"] and (last_mag is None or last_mag < 1300):
+        mag_str = f"{last_mag} ppm" if last_mag else "Unknown"
+        warnings.append(f"[!] MAGNESIUM GUARD: Foundation is {mag_str}. If Mag is under 1300, Alk/Cal stability is at risk.")
+
+    if name == "Alkalinity":
+        last_cal = get_last_test("Calcium")
+        if last_cal and last_cal > 480 and target > 10:
+            warnings.append("[!] PRECIPITATION RISK: Calcium is very high. Adding high Alkalinity could cause a 'snowstorm'.")
+    
+    limits = {"Alkalinity": 1.0, "Calcium": 20.0, "Magnesium": 100.0}
+    total_increase = target - current
+    if name in limits and total_increase > limits[name]:
+        min_days = math.ceil(total_increase / limits[name])
+        warnings.append(f"[!] SPEED LIMIT: Spread this {total_increase:.1f} unit increase over {min_days} days.")
+
+    if not warnings:
+        print("[OK] No immediate chemical conflicts detected.")
+    else:
+        for w in warnings: print(w)
+    
+    confirm = input("\nDo you wish to proceed with these risks? (y/n): ").lower()
+    return confirm == 'y'
+
+def save_entry(tank, entry_type, param, value, ph=None):
+    file_exists = os.path.isfile(LOG_FILE)
+    with open(LOG_FILE, "a", newline='') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["Timestamp", "Tank", "Type", "Parameter", "Value", "pH"])
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        writer.writerow([timestamp, tank, entry_type, param, value, ph])
 
 def main():
     print("==========================================")
-    print("   UNIVERSAL REEF DOSAGE COMMANDER v1.0   ")
+    print("   AQUARIUM DOSAGE COMMANDER v7.5 (PRO)   ")
     print("==========================================\n")
 
-    tank_name = input("Tank Name (e.g., Wraith): ") or "My Reef"
-    gallons = get_input(f"Total Water Volume for {tank_name} (Gallons): ")
+    tank_name = input("Enter Aquarium Name: ") or "My Aquarium"
+    gallons = get_input(f"Total Water Volume (Gallons): ")
     
     if not gallons:
-        print("Error: Tank volume is required.")
+        print("Volume required to calculate dosage.")
         return
 
-    # Configuration for Safety Guardrails
-    # Format: { Key: (Display Name, Unit, Max Daily Rise) }
-    params = {
-        "1": ("Alkalinity", "dKH", 1.0),
-        "2": ("Calcium", "ppm", 20.0),
-        "3": ("Magnesium", "ppm", 100.0)
-    }
-
     while True:
-        print("\nWhat would you like to calculate?")
-        print("1. Alkalinity\n2. Calcium\n3. Magnesium\n4. Exit")
-        choice = input("Select (1-4): ")
+        print(f"\n[{tank_name.upper()}] 1. Record Test  2. Calculate Dose  3. Exit")
+        mode = input("Select: ")
+        if mode == "3": break
 
-        if choice == "4": break
-        if choice not in params: continue
+        if mode == "1":
+            ph = get_input("Current pH: ")
+            param_name = input("Parameter (Alk/Cal/Mag): ")
+            val = get_input(f"Result Value: ")
+            if param_name.lower().startswith("a") and val and val > 20: val *= 0.056
+            save_entry(tank_name, "Test", param_name.capitalize(), val, ph)
+            print("Data Logged.")
 
-        name, unit, max_rise = params[choice]
-        print(f"\n--- {name} Adjustment ---")
-
-        # Special handling for Alkalinity Units
-        current = get_input(f"Current {name} level: ")
-        if choice == "1":
-            unit_choice = input("Is that (1) ppm or (2) dKH? ")
-            if unit_choice == "1":
-                current = current * 0.056 # Convert ppm to dKH
-                print(f"  > Converted to {current:.2f} dKH")
-        
-        target = get_input(f"Target {name} ({unit}): ")
-        
-        if current is not None and target is not None:
-            diff = target - current
-            if diff <= 0:
-                print(f"  Status: {name} is already at or above target.")
-                continue
-
-            print(f"\nFind the 'Product Strength' on your bottle.")
-            strength = get_input(f"How many {unit} does 1mL add to 1 Gallon of water?: ")
+        elif mode == "2":
+            params = {"1": ("Alkalinity", "dKH"), "2": ("Calcium", "ppm"), "3": ("Magnesium", "ppm")}
+            print("\n" + "\n".join([f"{k}. {v[0]}" for k, v in params.items()]))
+            choice = input("Select Parameter: ")
+            if choice not in params: continue
             
-            if strength:
-                total_ml = (diff * gallons) / strength
-                days = math.ceil(diff / max_rise)
-                daily_dose = total_ml / days
+            name, unit = params[choice]
+            curr = get_input(f"Current {name}: ")
+            if choice == "1" and curr and curr > 20: curr *= 0.056
+            
+            targ = get_input(f"Target {name}: ")
+            ph = get_input("Current pH (Optional): ")
+            
+            if not run_safety_suite(name, curr, targ, ph): continue
 
-                print("-" * 30)
-                print(f"RESULTS FOR {tank_name.upper()}:")
-                print(f"Total {name} to add: {total_ml:.1f} mL")
-                print(f"Daily Safety Dose: {daily_dose:.1f} mL")
-                print(f"Duration:          {days} Day(s)")
-                print("-" * 30)
+            strength = get_input(f"Product Strength (1mL adds how many {unit} to 1 Gal?): ")
+            if all([curr, targ, strength]):
+                total_ml = ((targ - curr) * gallons) / strength
+                print(f"\n--- DOSAGE: {total_ml:.1f} mL Total ---")
+                print(f"Record this in your log if you dose today.")
 
-    print("\nHappy Reefing! Remember: Stability is key.")
+    print("\nHappy Reefing!")
 
 if __name__ == "__main__":
     main()
