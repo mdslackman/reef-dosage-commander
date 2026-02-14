@@ -13,42 +13,46 @@ SETTINGS_FILE = "settings.json"
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.10.5 (Pre-Alpha)")
+        self.root.title("Aquarium Commander Pro v0.10.6")
         self.root.geometry("800x950")
 
         self.load_settings()
         
-        # --- REEF PARAMETER MASTER RANGES ---
-        # Range: [MinRed, MinYellow, GreenStart, GreenEnd, MaxYellow, MaxRed]
+        # --- PARAMETER MASTER DATA ---
         self.ranges = {
             "Alkalinity": {
                 "units": ["dKH", "ppm"], 
                 "target": 8.5, 
                 "range": [5, 6, 7, 11, 12, 14],
-                "conv": 17.86
+                "brands": {
+                    "Custom (Manual)": 0,
+                    "Fritz RPM Liquid Alk": 0.6,
+                    "ESV B-Ionic Alk (Part 1)": 1.9,
+                    "Red Sea Foundation B (Alk)": 0.1,
+                    "BRC Pharma Soda Ash": 0.5
+                }
             },
             "Calcium": {
                 "units": ["ppm"], 
                 "target": 420, 
                 "range": [300, 350, 380, 450, 500, 550],
-                "conv": 1.0
+                "brands": {
+                    "Custom (Manual)": 0,
+                    "Fritz RPM Liquid Cal": 10.0,
+                    "ESV B-Ionic Cal (Part 2)": 20.0,
+                    "Red Sea Foundation A (Cal)": 2.0
+                }
             },
             "Magnesium": {
                 "units": ["ppm"], 
                 "target": 1350, 
                 "range": [1000, 1150, 1250, 1450, 1550, 1700],
-                "conv": 1.0
+                "brands": {
+                    "Custom (Manual)": 0,
+                    "Fritz RPM Liquid Mag": 5.0,
+                    "Red Sea Foundation C (Mag)": 1.0
+                }
             }
-        }
-        
-        self.brands = {
-            "Custom (Manual)": 0,
-            "ESV B-Ionic Alk": 1.9,
-            "ESV B-Ionic Cal": 20.0,
-            "Red Sea Foundation A (Cal)": 2.0,
-            "Red Sea Foundation B (Alk)": 0.1,
-            "Fritz RPM Liquid Alk": 0.6,
-            "BRC Pharma Soda Ash": 0.5
         }
 
         self.notebook = ttk.Notebook(root)
@@ -75,60 +79,85 @@ class AquariumCommanderPro:
         else:
             self.settings = {"tank_name": "New Reef Tank", "volume": 220.0}
 
-    # --- TAB 1: DOSAGE & AUTO-SAFETY ---
     def build_calc_tab(self):
         self.calc_frame = ttk.Frame(self.calc_tab, padding="20")
         self.calc_frame.pack(fill="both", expand=True)
 
+        # Variables
         self.param_var = tk.StringVar(value="Alkalinity")
         self.unit_var = tk.StringVar(value="dKH")
         self.brand_var = tk.StringVar(value="Custom (Manual)")
+        self.targ_unit_label_var = tk.StringVar(value="dKH")
 
         self.header_lbl = tk.Label(self.calc_frame, text=f"Tank: {self.settings['tank_name']}", font=("Arial", 10, "italic"))
-        self.header_lbl.grid(row=0, column=0, columnspan=2)
+        self.header_lbl.grid(row=0, column=0, columnspan=3)
         
         self.gauge_canvas = tk.Canvas(self.calc_frame, width=500, height=70, bg="#f0f0f0", highlightthickness=0)
-        self.gauge_canvas.grid(row=2, column=0, columnspan=2, pady=15)
+        self.gauge_canvas.grid(row=1, column=0, columnspan=3, pady=15)
 
-        tk.Label(self.calc_frame, text="Parameter:").grid(row=3, column=0, sticky="w")
+        # Inputs
+        tk.Label(self.calc_frame, text="Parameter:").grid(row=2, column=0, sticky="w")
         self.param_menu = ttk.Combobox(self.calc_frame, textvariable=self.param_var, values=list(self.ranges.keys()), state="readonly")
-        self.param_menu.grid(row=3, column=1, pady=5, sticky="ew")
-        self.param_menu.bind("<<ComboboxSelected>>", self.update_units_and_presets)
+        self.param_menu.grid(row=2, column=1, pady=5, sticky="ew")
+        self.param_menu.bind("<<ComboboxSelected>>", self.update_param_selection)
 
-        tk.Label(self.calc_frame, text="Current Level:").grid(row=4, column=0, sticky="w")
+        tk.Label(self.calc_frame, text="Current Level:").grid(row=3, column=0, sticky="w")
         self.curr_ent = tk.Entry(self.calc_frame)
-        self.curr_ent.grid(row=4, column=1, pady=5, sticky="ew")
+        self.curr_ent.grid(row=3, column=1, pady=5, sticky="ew")
         self.curr_ent.bind("<KeyRelease>", self.handle_input_change)
 
-        tk.Label(self.calc_frame, text="Unit:").grid(row=5, column=0, sticky="w")
+        tk.Label(self.calc_frame, text="Unit:").grid(row=4, column=0, sticky="w")
         self.unit_menu = ttk.Combobox(self.calc_frame, textvariable=self.unit_var, state="readonly")
-        self.unit_menu.grid(row=5, column=1, pady=5, sticky="ew")
+        self.unit_menu.grid(row=4, column=1, pady=5, sticky="ew")
         self.unit_menu.bind("<<ComboboxSelected>>", self.sync_target_unit)
 
-        tk.Label(self.calc_frame, text="Target Level:").grid(row=6, column=0, sticky="w")
+        tk.Label(self.calc_frame, text="Target Level:").grid(row=5, column=0, sticky="w")
         self.targ_ent = tk.Entry(self.calc_frame)
-        self.targ_ent.grid(row=6, column=1, pady=5, sticky="ew")
+        self.targ_ent.grid(row=5, column=1, pady=5, sticky="ew")
+        tk.Label(self.calc_frame, textvariable=self.targ_unit_label_var, font=("Arial", 9, "bold")).grid(row=5, column=2, sticky="w", padx=5)
 
-        tk.Label(self.calc_frame, text="Product Strength:").grid(row=8, column=0, sticky="w")
+        tk.Label(self.calc_frame, text="Product:").grid(row=6, column=0, sticky="w")
+        self.brand_menu = ttk.Combobox(self.calc_frame, textvariable=self.brand_var, state="readonly")
+        self.brand_menu.grid(row=6, column=1, pady=5, sticky="ew")
+        self.brand_menu.bind("<<ComboboxSelected>>", self.apply_brand_strength)
+
+        tk.Label(self.calc_frame, text="Strength (mL per gal):").grid(row=7, column=0, sticky="w")
         self.strength_ent = tk.Entry(self.calc_frame)
-        self.strength_ent.grid(row=8, column=1, pady=5, sticky="ew")
+        self.strength_ent.grid(row=7, column=1, pady=5, sticky="ew")
 
         self.calc_btn = tk.Button(self.calc_frame, text="CALCULATE DOSE", command=self.perform_calculation, bg="#2980b9", fg="white", font=("Arial", 10, "bold"))
-        self.calc_btn.grid(row=9, column=0, columnspan=2, pady=20, sticky="ew")
+        self.calc_btn.grid(row=8, column=0, columnspan=3, pady=20, sticky="ew")
         
         self.res_lbl = tk.Label(self.calc_frame, text="", font=("Consolas", 11, "bold"), wraplength=450)
-        self.res_lbl.grid(row=10, column=0, columnspan=2)
+        self.res_lbl.grid(row=9, column=0, columnspan=3)
 
-        self.update_units_and_presets()
+        self.update_param_selection()
+
+    def update_param_selection(self, event=None):
+        p = self.param_var.get()
+        # Update units
+        self.unit_menu.config(values=self.ranges[p]["units"])
+        self.unit_menu.set(self.ranges[p]["units"][0])
+        # Update brand list
+        self.brand_menu.config(values=list(self.ranges[p]["brands"].keys()))
+        self.brand_menu.set("Custom (Manual)")
+        self.strength_ent.delete(0, tk.END)
+        self.sync_target_unit()
+
+    def apply_brand_strength(self, event=None):
+        p = self.param_var.get()
+        b = self.brand_var.get()
+        strength = self.ranges[p]["brands"][b]
+        self.strength_ent.delete(0, tk.END)
+        if strength > 0:
+            self.strength_ent.insert(0, str(strength))
 
     def handle_input_change(self, event=None):
         try:
             val = float(self.curr_ent.get())
-            # Auto-unit switch logic for Alk
             if self.param_var.get() == "Alkalinity" and self.unit_var.get() == "dKH" and val > 25:
                 self.unit_var.set("ppm")
                 self.sync_target_unit()
-            
             self.draw_gauge(val)
         except: pass
 
@@ -139,44 +168,37 @@ class AquariumCommanderPro:
         for i, color in enumerate(colors):
             self.gauge_canvas.create_rectangle(offset + (i*80), 10, offset + ((i+1)*80), 35, fill=color, outline="")
         
-        param = self.param_var.get()
-        unit = self.unit_var.get()
-        adj_value = value / 17.86 if param == "Alkalinity" and unit == "ppm" else value
-        r_list = self.ranges[param]["range"]
+        p = self.param_var.get()
+        u = self.unit_var.get()
+        adj_value = value / 17.86 if p == "Alkalinity" and u == "ppm" else value
+        r_list = self.ranges[p]["range"]
         
         pos = (((adj_value - r_list[0]) / (r_list[5] - r_list[0])) * 400) if r_list[5] > r_list[0] else 0
         pos = max(0, min(400, pos)) + offset
         
         self.gauge_canvas.create_line(pos, 5, pos, 40, fill="black", width=4)
-        self.gauge_canvas.create_text(pos, 55, text=f"{value} {unit}", font=("Arial", 9, "bold"))
+        self.gauge_canvas.create_text(pos, 55, text=f"{value} {u}", font=("Arial", 9, "bold"))
 
     def sync_target_unit(self, event=None):
-        param = self.param_var.get()
-        unit = self.unit_var.get()
-        base_targ = self.ranges[param]["target"]
-        new_targ = round(base_targ * 17.86, 1) if param == "Alkalinity" and unit == "ppm" else base_targ
+        p = self.param_var.get()
+        u = self.unit_var.get()
+        self.targ_unit_label_var.set(u)
+        base_targ = self.ranges[p]["target"]
+        new_targ = round(base_targ * 17.86, 1) if p == "Alkalinity" and u == "ppm" else base_targ
         self.targ_ent.delete(0, tk.END)
         self.targ_ent.insert(0, str(new_targ))
 
-    def update_units_and_presets(self, event=None):
-        p = self.param_var.get()
-        self.unit_menu.config(values=self.ranges[p]["units"])
-        self.unit_menu.set(self.ranges[p]["units"][0])
-        self.sync_target_unit()
-
     def perform_calculation(self):
         try:
-            param = self.param_var.get()
+            p = self.param_var.get()
             curr = float(self.curr_ent.get())
             targ = float(self.targ_ent.get())
-            unit = self.unit_var.get()
+            u = self.unit_var.get()
             
-            # Normalize to dKH for Alk safety check
-            check_val = curr / 17.86 if param == "Alkalinity" and unit == "ppm" else curr
-            safe_max = self.ranges[param]["range"][3] # Green End
-
-            if check_val > safe_max:
-                self.res_lbl.config(text=f"WARNING: {param} is too high ({curr}).\nDo not dose. Perform a water change if needed.", fg="#c0392b")
+            # Safety Check
+            check_val = curr / 17.86 if p == "Alkalinity" and u == "ppm" else curr
+            if check_val > self.ranges[p]["range"][3]:
+                self.res_lbl.config(text=f"STOP: {p} is too high ({curr} {u}).\nDosing now could cause a crash or stress.", fg="#c0392b")
                 return
 
             diff = targ - curr
@@ -187,34 +209,24 @@ class AquariumCommanderPro:
             strength = float(self.strength_ent.get())
             vol = float(self.settings["volume"])
             total_ml = (diff * vol) / strength
-            self.res_lbl.config(text=f"DOSE: {total_ml:.1f} mL Total\nTarget: {targ} | Rise: +{diff:.2f}", fg="#2980b9")
+            self.res_lbl.config(text=f"DOSE: {total_ml:.1f} mL Total\nTarget: {targ} {u} | Rise: +{diff:.2f}", fg="#2980b9")
             
             if messagebox.askyesno("Log", "Log this dose?"):
-                self.save_to_csv("Dose", param, total_ml)
+                self.save_to_csv("Dose", p, total_ml)
         except: messagebox.showerror("Error", "Check numeric inputs.")
 
-    # --- TAB 2: BULK LOGGING (The Big Three) ---
+    # --- MAINTENANCE & LOGGING (Bulk Big Three) ---
     def build_maint_tab(self):
         for widget in self.maint_tab.winfo_children(): widget.destroy()
-        scroll_frame = ttk.Frame(self.maint_tab, padding="20")
-        scroll_frame.pack(fill="both")
-
-        tk.Label(scroll_frame, text="Log Water Parameters", font=("Arial", 14, "bold")).pack(pady=10)
-        desk = ttk.LabelFrame(scroll_frame, text=" Measurement Desk ", padding=10)
-        desk.pack(fill="x")
-
+        f = ttk.Frame(self.maint_tab, padding="20"); f.pack(fill="both")
+        tk.Label(f, text="Log Water Parameters", font=("Arial", 14, "bold")).pack(pady=10)
+        desk = ttk.LabelFrame(f, text=" Bulk Test Results ", padding=10); desk.pack(fill="x")
+        
         tk.Label(desk, text="Date:").grid(row=0, column=0)
         self.b_date = tk.Entry(desk); self.b_date.insert(0, datetime.now().strftime("%Y-%m-%d")); self.b_date.grid(row=0, column=1)
-
-        tk.Label(desk, text="Alkalinity:").grid(row=1, column=0)
-        self.b_alk = tk.Entry(desk); self.b_alk.grid(row=1, column=1)
-
-        tk.Label(desk, text="Calcium:").grid(row=2, column=0)
-        self.b_cal = tk.Entry(desk); self.b_cal.grid(row=2, column=1)
-
-        tk.Label(desk, text="Magnesium:").grid(row=3, column=0)
-        self.b_mag = tk.Entry(desk); self.b_mag.grid(row=3, column=1)
-
+        tk.Label(desk, text="Alk (dKH):").grid(row=1, column=0); self.b_alk = tk.Entry(desk); self.b_alk.grid(row=1, column=1)
+        tk.Label(desk, text="Cal (ppm):").grid(row=2, column=0); self.b_cal = tk.Entry(desk); self.b_cal.grid(row=2, column=1)
+        tk.Label(desk, text="Mag (ppm):").grid(row=3, column=0); self.b_mag = tk.Entry(desk); self.b_mag.grid(row=3, column=1)
         tk.Button(desk, text="SAVE ALL TESTS", command=self.save_bulk, bg="#8e44ad", fg="white").grid(row=4, column=0, columnspan=2, pady=10, sticky="ew")
 
     def save_bulk(self):
@@ -224,9 +236,8 @@ class AquariumCommanderPro:
             if self.b_cal.get(): self.save_to_csv("Test", "Calcium", float(self.b_cal.get()), d)
             if self.b_mag.get(): self.save_to_csv("Test", "Magnesium", float(self.b_mag.get()), d)
             messagebox.showinfo("Success", "Tests recorded.")
-        except: messagebox.showerror("Error", "Use numbers for values.")
+        except: messagebox.showerror("Error", "Numeric values only.")
 
-    # --- TAB 3 & 4: LOGS & SETTINGS ---
     def build_log_tab(self):
         for widget in self.log_tab.winfo_children(): widget.destroy()
         f = ttk.Frame(self.log_tab, padding="20"); f.pack(fill="both")
@@ -244,9 +255,11 @@ class AquariumCommanderPro:
 
     def build_settings_tab(self):
         f = ttk.Frame(self.settings_tab, padding="20"); f.pack(fill="both")
+        tk.Label(f, text="Tank Name:").pack()
         self.name_ent = tk.Entry(f); self.name_ent.insert(0, self.settings["tank_name"]); self.name_ent.pack()
+        tk.Label(f, text="Volume (Gal):").pack()
         self.vol_ent = tk.Entry(f); self.vol_ent.insert(0, str(self.settings["volume"])); self.vol_ent.pack()
-        tk.Button(f, text="SAVE SETTINGS", command=self.save_config).pack()
+        tk.Button(f, text="SAVE SETTINGS", command=self.save_config).pack(pady=10)
 
     def save_config(self):
         self.settings = {"tank_name": self.name_ent.get(), "volume": float(self.vol_ent.get())}
