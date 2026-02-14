@@ -6,17 +6,17 @@ from datetime import datetime
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.14.0")
+        self.root.title("Aquarium Commander Pro v0.14.1")
         
-        # --- UI LOCKDOWN ---
-        self.root.geometry("900x800")
+        # UI LOCKDOWN
+        self.root.geometry("900x850")
         self.root.resizable(False, False) 
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
         self.log_file = "reef_logs.csv"
         self.init_csv()
 
-        # Concentrations (Impact of 1mL in 1 Gal)
+        # Product Data
         self.brand_data = {
             "ESV B-Ionic Alk (Part 1)": 1.4,
             "Fritz RPM Liquid Alk": 1.4,
@@ -31,7 +31,7 @@ class AquariumCommanderPro:
             "Magnesium": {"units": ["ppm"], "target": 1350, "brands": ["Fritz RPM Liquid Mag"]}
         }
 
-        # App Variables
+        # Variables
         self.vol_var = tk.StringVar()
         self.p_var = tk.StringVar(value="Alkalinity")
         self.u_var = tk.StringVar()
@@ -40,11 +40,11 @@ class AquariumCommanderPro:
         self.targ_val_var = tk.StringVar()
         self.custom_strength = tk.StringVar()
         
-        # Traces
+        # Traces for Auto-Switching
         self.curr_val_var.trace_add("write", self.handle_unit_auto_switch)
         self.u_var.trace_add("write", self.sync_target_unit)
         
-        # UI
+        # UI Structure
         self.notebook = ttk.Notebook(root)
         self.tabs = {name: ttk.Frame(self.notebook) for name in ["Dosage", "Maintenance", "History", "Mix Guide"]}
         for name, frame in self.tabs.items(): 
@@ -63,87 +63,95 @@ class AquariumCommanderPro:
                 csv.writer(f).writerow(["Timestamp", "Parameter", "Value"])
 
     def handle_unit_auto_switch(self, *args):
-        """Switch dKH to ppm if value > 25."""
         try:
             val = float(self.curr_val_var.get())
+            # If user types > 25, they clearly mean PPM
             if self.p_var.get() == "Alkalinity" and self.u_var.get() == "dKH" and val > 25:
                 self.u_var.set("ppm")
         except: pass
 
     def sync_target_unit(self, *args):
-        """Updates Target Goal value when Unit changes."""
         p = self.p_var.get()
         u = self.u_var.get()
         base_target = self.ranges[p]["target"]
-        
-        if p == "Alkalinity":
-            if u == "ppm":
-                self.targ_val_var.set(f"{round(base_target * 17.86)}")
-            else:
-                self.targ_val_var.set(str(base_target))
+        if p == "Alkalinity" and u == "ppm":
+            self.targ_val_var.set(str(round(base_target * 17.86)))
         else:
             self.targ_val_var.set(str(base_target))
 
     def build_dosage(self):
-        f = ttk.Frame(self.tabs["Dosage"], padding="40")
+        f = ttk.Frame(self.tabs["Dosage"], padding="30")
         f.pack(fill="both", expand=True)
+        
+        # Grid Configuration for full-width fields
         f.columnconfigure(1, weight=1)
-
         l_font, e_font = ("Arial", 14, "bold"), ("Arial", 14)
 
-        tk.Label(f, text="Volume (Gal):", font=l_font).grid(row=0, column=0, sticky="w", pady=10)
+        # 1. Volume
+        tk.Label(f, text="Tank Volume (Gal):", font=l_font).grid(row=0, column=0, sticky="w", pady=10)
         tk.Entry(f, textvariable=self.vol_var, font=e_font, bg="#ffffcc").grid(row=0, column=1, sticky="ew")
 
+        # 2. Category Dropdown
         tk.Label(f, text="Category:", font=l_font).grid(row=1, column=0, sticky="w", pady=10)
         self.p_menu = ttk.Combobox(f, textvariable=self.p_var, values=list(self.ranges.keys()), state="readonly", font=e_font)
         self.p_menu.grid(row=1, column=1, sticky="ew")
         self.p_menu.bind("<<ComboboxSelected>>", self.update_param_selection)
 
+        # 3. Unit Dropdown
         tk.Label(f, text="Unit:", font=l_font).grid(row=2, column=0, sticky="w", pady=10)
         self.u_menu = ttk.Combobox(f, textvariable=self.u_var, state="readonly", font=e_font)
         self.u_menu.grid(row=2, column=1, sticky="ew")
 
+        # 4. Product Dropdown
         tk.Label(f, text="Product:", font=l_font).grid(row=3, column=0, sticky="w", pady=10)
         self.b_menu = ttk.Combobox(f, textvariable=self.b_var, state="readonly", font=e_font)
         self.b_menu.grid(row=3, column=1, sticky="ew")
 
+        # 5. Current Reading
         tk.Label(f, text="Current Reading:", font=l_font).grid(row=4, column=0, sticky="w", pady=10)
         tk.Entry(f, textvariable=self.curr_val_var, font=e_font).grid(row=4, column=1, sticky="ew")
 
+        # 6. Target Goal
         tk.Label(f, text="Target Goal:", font=l_font).grid(row=5, column=0, sticky="w", pady=10)
         tk.Entry(f, textvariable=self.targ_val_var, font=e_font).grid(row=5, column=1, sticky="ew")
 
-        tk.Label(f, text="Custom Strength (Opt):", font=("Arial", 10)).grid(row=6, column=0, sticky="w")
+        # 7. Custom Strength
+        tk.Label(f, text="Custom Strength (Opt):", font=("Arial", 10)).grid(row=6, column=0, sticky="w", pady=5)
         tk.Entry(f, textvariable=self.custom_strength, font=("Arial", 10)).grid(row=6, column=1, sticky="w")
 
+        # 8. Calculate Button
         tk.Button(f, text="CALCULATE DOSAGE", command=self.perform_calc, bg="#2c3e50", fg="white", font=("Arial", 14, "bold"), height=2).grid(row=7, columnspan=2, pady=25, sticky="ew")
         
+        # 9. Results Area
         self.res_lbl = tk.Label(f, text="---", font=("Arial", 18, "bold"), fg="#2980b9", wraplength=700)
         self.res_lbl.grid(row=8, columnspan=2, pady=10)
 
     def perform_calc(self):
         try:
-            p, vol, unit = self.p_var.get(), float(self.vol_var.get()), self.u_var.get()
-            curr, targ = float(self.curr_val_var.get()), float(self.targ_val_var.get())
+            p = self.p_var.get()
+            vol = float(self.vol_var.get())
+            unit = self.u_var.get()
+            curr = float(self.curr_val_var.get())
+            targ = float(self.targ_val_var.get())
             
-            # Unit standardization
+            # Standardization math
             std_curr = curr / 17.86 if (p == "Alkalinity" and unit == "ppm") else curr
             std_targ = targ / 17.86 if (p == "Alkalinity" and unit == "ppm") else targ
 
-            # Concentration selection
+            # Strength logic
             if self.custom_strength.get():
                 strength = float(self.custom_strength.get())
             else:
                 strength = self.brand_data.get(self.b_var.get(), 1.0)
 
-            total_ml = ((std_targ - std_curr) * vol) / strength
-            
-            if total_ml <= 0:
+            diff = std_targ - std_curr
+            if diff <= 0:
                 self.res_lbl.config(text="STATUS: OPTIMAL", fg="green")
             else:
+                total_ml = (diff * vol) / strength
                 self.res_lbl.config(text=f"DOSE: {total_ml:.1f} mL Total", fg="#c0392b")
-        except:
-            self.res_lbl.config(text="ERROR: Check Inputs", fg="red")
+        except Exception as e:
+            self.res_lbl.config(text=f"ERROR: Check Numbers", fg="red")
 
     def update_param_selection(self, e=None):
         p = self.p_var.get()
