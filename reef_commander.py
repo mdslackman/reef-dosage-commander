@@ -13,7 +13,7 @@ SETTINGS_FILE = "settings.json"
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.10.6")
+        self.root.title("Aquarium Commander Pro v0.10.7")
         self.root.geometry("800x950")
 
         self.load_settings()
@@ -25,7 +25,7 @@ class AquariumCommanderPro:
                 "target": 8.5, 
                 "range": [5, 6, 7, 11, 12, 14],
                 "brands": {
-                    "Custom (Manual)": 0,
+                    "Custom (Manual)": 0.0,
                     "Fritz RPM Liquid Alk": 0.6,
                     "ESV B-Ionic Alk (Part 1)": 1.9,
                     "Red Sea Foundation B (Alk)": 0.1,
@@ -37,7 +37,7 @@ class AquariumCommanderPro:
                 "target": 420, 
                 "range": [300, 350, 380, 450, 500, 550],
                 "brands": {
-                    "Custom (Manual)": 0,
+                    "Custom (Manual)": 0.0,
                     "Fritz RPM Liquid Cal": 10.0,
                     "ESV B-Ionic Cal (Part 2)": 20.0,
                     "Red Sea Foundation A (Cal)": 2.0
@@ -48,7 +48,7 @@ class AquariumCommanderPro:
                 "target": 1350, 
                 "range": [1000, 1150, 1250, 1450, 1550, 1700],
                 "brands": {
-                    "Custom (Manual)": 0,
+                    "Custom (Manual)": 0.0,
                     "Fritz RPM Liquid Mag": 5.0,
                     "Red Sea Foundation C (Mag)": 1.0
                 }
@@ -72,6 +72,9 @@ class AquariumCommanderPro:
         self.build_log_tab()
         self.build_settings_tab()
 
+        # Final UI Sync
+        self.update_param_selection()
+
     def load_settings(self):
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, "r") as f:
@@ -83,7 +86,6 @@ class AquariumCommanderPro:
         self.calc_frame = ttk.Frame(self.calc_tab, padding="20")
         self.calc_frame.pack(fill="both", expand=True)
 
-        # Variables
         self.param_var = tk.StringVar(value="Alkalinity")
         self.unit_var = tk.StringVar(value="dKH")
         self.brand_var = tk.StringVar(value="Custom (Manual)")
@@ -95,59 +97,67 @@ class AquariumCommanderPro:
         self.gauge_canvas = tk.Canvas(self.calc_frame, width=500, height=70, bg="#f0f0f0", highlightthickness=0)
         self.gauge_canvas.grid(row=1, column=0, columnspan=3, pady=15)
 
-        # Inputs
+        # Parameter Selection
         tk.Label(self.calc_frame, text="Parameter:").grid(row=2, column=0, sticky="w")
         self.param_menu = ttk.Combobox(self.calc_frame, textvariable=self.param_var, values=list(self.ranges.keys()), state="readonly")
         self.param_menu.grid(row=2, column=1, pady=5, sticky="ew")
         self.param_menu.bind("<<ComboboxSelected>>", self.update_param_selection)
 
+        # Current Level
         tk.Label(self.calc_frame, text="Current Level:").grid(row=3, column=0, sticky="w")
         self.curr_ent = tk.Entry(self.calc_frame)
         self.curr_ent.grid(row=3, column=1, pady=5, sticky="ew")
         self.curr_ent.bind("<KeyRelease>", self.handle_input_change)
 
+        # Unit Selection
         tk.Label(self.calc_frame, text="Unit:").grid(row=4, column=0, sticky="w")
         self.unit_menu = ttk.Combobox(self.calc_frame, textvariable=self.unit_var, state="readonly")
         self.unit_menu.grid(row=4, column=1, pady=5, sticky="ew")
         self.unit_menu.bind("<<ComboboxSelected>>", self.sync_target_unit)
 
+        # Target Level
         tk.Label(self.calc_frame, text="Target Level:").grid(row=5, column=0, sticky="w")
         self.targ_ent = tk.Entry(self.calc_frame)
         self.targ_ent.grid(row=5, column=1, pady=5, sticky="ew")
         tk.Label(self.calc_frame, textvariable=self.targ_unit_label_var, font=("Arial", 9, "bold")).grid(row=5, column=2, sticky="w", padx=5)
 
+        # Product Dropdown (The fix is here)
         tk.Label(self.calc_frame, text="Product:").grid(row=6, column=0, sticky="w")
         self.brand_menu = ttk.Combobox(self.calc_frame, textvariable=self.brand_var, state="readonly")
         self.brand_menu.grid(row=6, column=1, pady=5, sticky="ew")
         self.brand_menu.bind("<<ComboboxSelected>>", self.apply_brand_strength)
 
-        tk.Label(self.calc_frame, text="Strength (mL per gal):").grid(row=7, column=0, sticky="w")
+        # Strength
+        tk.Label(self.calc_frame, text="Strength (Rise per mL/Gal):").grid(row=7, column=0, sticky="w")
         self.strength_ent = tk.Entry(self.calc_frame)
         self.strength_ent.grid(row=7, column=1, pady=5, sticky="ew")
 
+        # Action
         self.calc_btn = tk.Button(self.calc_frame, text="CALCULATE DOSE", command=self.perform_calculation, bg="#2980b9", fg="white", font=("Arial", 10, "bold"))
         self.calc_btn.grid(row=8, column=0, columnspan=3, pady=20, sticky="ew")
         
         self.res_lbl = tk.Label(self.calc_frame, text="", font=("Consolas", 11, "bold"), wraplength=450)
         self.res_lbl.grid(row=9, column=0, columnspan=3)
 
-        self.update_param_selection()
-
     def update_param_selection(self, event=None):
         p = self.param_var.get()
-        # Update units
+        # 1. Update Unit Menu
         self.unit_menu.config(values=self.ranges[p]["units"])
         self.unit_menu.set(self.ranges[p]["units"][0])
-        # Update brand list
-        self.brand_menu.config(values=list(self.ranges[p]["brands"].keys()))
+        
+        # 2. Update Brand Menu Values (CRITICAL FIX)
+        brand_list = list(self.ranges[p]["brands"].keys())
+        self.brand_menu.config(values=brand_list)
         self.brand_menu.set("Custom (Manual)")
+        
+        # 3. Clear strength and update target
         self.strength_ent.delete(0, tk.END)
         self.sync_target_unit()
 
     def apply_brand_strength(self, event=None):
         p = self.param_var.get()
         b = self.brand_var.get()
-        strength = self.ranges[p]["brands"][b]
+        strength = self.ranges[p]["brands"].get(b, 0.0)
         self.strength_ent.delete(0, tk.END)
         if strength > 0:
             self.strength_ent.insert(0, str(strength))
@@ -155,6 +165,7 @@ class AquariumCommanderPro:
     def handle_input_change(self, event=None):
         try:
             val = float(self.curr_ent.get())
+            # Auto-switch to PPM if Alk value is high
             if self.param_var.get() == "Alkalinity" and self.unit_var.get() == "dKH" and val > 25:
                 self.unit_var.set("ppm")
                 self.sync_target_unit()
@@ -195,10 +206,10 @@ class AquariumCommanderPro:
             targ = float(self.targ_ent.get())
             u = self.unit_var.get()
             
-            # Safety Check
+            # Safety Thresholds
             check_val = curr / 17.86 if p == "Alkalinity" and u == "ppm" else curr
             if check_val > self.ranges[p]["range"][3]:
-                self.res_lbl.config(text=f"STOP: {p} is too high ({curr} {u}).\nDosing now could cause a crash or stress.", fg="#c0392b")
+                self.res_lbl.config(text=f"CRITICAL: {p} is too high ({curr} {u}).\nStop dosing immediately.", fg="#c0392b")
                 return
 
             diff = targ - curr
@@ -213,15 +224,13 @@ class AquariumCommanderPro:
             
             if messagebox.askyesno("Log", "Log this dose?"):
                 self.save_to_csv("Dose", p, total_ml)
-        except: messagebox.showerror("Error", "Check numeric inputs.")
+        except: messagebox.showerror("Error", "Please check all numeric inputs.")
 
-    # --- MAINTENANCE & LOGGING (Bulk Big Three) ---
+    # --- OTHER TABS (Maintenance, History, Settings) ---
     def build_maint_tab(self):
         for widget in self.maint_tab.winfo_children(): widget.destroy()
         f = ttk.Frame(self.maint_tab, padding="20"); f.pack(fill="both")
-        tk.Label(f, text="Log Water Parameters", font=("Arial", 14, "bold")).pack(pady=10)
-        desk = ttk.LabelFrame(f, text=" Bulk Test Results ", padding=10); desk.pack(fill="x")
-        
+        desk = ttk.LabelFrame(f, text=" Bulk Test Entry ", padding=10); desk.pack(fill="x")
         tk.Label(desk, text="Date:").grid(row=0, column=0)
         self.b_date = tk.Entry(desk); self.b_date.insert(0, datetime.now().strftime("%Y-%m-%d")); self.b_date.grid(row=0, column=1)
         tk.Label(desk, text="Alk (dKH):").grid(row=1, column=0); self.b_alk = tk.Entry(desk); self.b_alk.grid(row=1, column=1)
@@ -235,8 +244,8 @@ class AquariumCommanderPro:
             if self.b_alk.get(): self.save_to_csv("Test", "Alkalinity", float(self.b_alk.get()), d)
             if self.b_cal.get(): self.save_to_csv("Test", "Calcium", float(self.b_cal.get()), d)
             if self.b_mag.get(): self.save_to_csv("Test", "Magnesium", float(self.b_mag.get()), d)
-            messagebox.showinfo("Success", "Tests recorded.")
-        except: messagebox.showerror("Error", "Numeric values only.")
+            messagebox.showinfo("Success", "Tests recorded in history.")
+        except: messagebox.showerror("Error", "Enter numeric values only.")
 
     def build_log_tab(self):
         for widget in self.log_tab.winfo_children(): widget.destroy()
@@ -255,10 +264,8 @@ class AquariumCommanderPro:
 
     def build_settings_tab(self):
         f = ttk.Frame(self.settings_tab, padding="20"); f.pack(fill="both")
-        tk.Label(f, text="Tank Name:").pack()
-        self.name_ent = tk.Entry(f); self.name_ent.insert(0, self.settings["tank_name"]); self.name_ent.pack()
-        tk.Label(f, text="Volume (Gal):").pack()
-        self.vol_ent = tk.Entry(f); self.vol_ent.insert(0, str(self.settings["volume"])); self.vol_ent.pack()
+        tk.Label(f, text="Tank Name:").pack(); self.name_ent = tk.Entry(f); self.name_ent.insert(0, self.settings["tank_name"]); self.name_ent.pack()
+        tk.Label(f, text="Volume (Gal):").pack(); self.vol_ent = tk.Entry(f); self.vol_ent.insert(0, str(self.settings["volume"])); self.vol_ent.pack()
         tk.Button(f, text="SAVE SETTINGS", command=self.save_config).pack(pady=10)
 
     def save_config(self):
@@ -277,4 +284,4 @@ class AquariumCommanderPro:
         self.refresh_logs()
 
 if __name__ == "__main__":
-    root = tk.Tk(); app = AquariumCommanderPro(root); root.mainloop()
+    root = tk.Tk(); app = AquariumCommanderPro(root); root.mainloop()oop()
