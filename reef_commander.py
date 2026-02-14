@@ -1,15 +1,17 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-import csv, os
-from datetime import datetime
+import sys, os
 
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.13.2")
+        self.root.title("Aquarium Commander Pro v0.13.3")
         self.root.geometry("1000x900")
         
-        # Product & Unit Data
+        # --- CRITICAL FIX: CLEAN EXIT ---
+        # This ensures the app kills itself fully when the window is closed
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         self.prices = {
             "Fritz RPM Liquid Alkalinity": 23.99,
             "ESV B-Ionic Alk (Part 1)": 24.92,
@@ -18,9 +20,8 @@ class AquariumCommanderPro:
         }
         price_keys = list(self.prices.keys())
         
-        # Safety Thresholds
         self.safety_ranges = {
-            "Alkalinity": {"min": 5.0, "max": 13.0}, # in dKH
+            "Alkalinity": {"min": 5.0, "max": 13.0}, # dKH
             "Calcium": {"min": 350.0, "max": 550.0},
             "Magnesium": {"min": 1100.0, "max": 1600.0}
         }
@@ -31,20 +32,15 @@ class AquariumCommanderPro:
             "Magnesium": {"units": ["ppm"], "target": 1350, "brands": [price_keys[3]]}
         }
 
-        self.vol_var = tk.StringVar(value="")
+        self.vol_var = tk.StringVar()
         self.p_var = tk.StringVar(value="Alkalinity")
         self.u_var = tk.StringVar()
         
-        self.notebook = ttk.Notebook(root)
-        self.calc_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.calc_tab, text=" Dosage & Safety ")
-        self.notebook.pack(expand=1, fill="both")
-        
-        self.build_calc_tab()
+        self.build_ui()
         self.update_param_selection()
 
-    def build_calc_tab(self):
-        f = ttk.Frame(self.calc_tab, padding="40"); f.pack(fill="both", expand=True)
+    def build_ui(self):
+        f = ttk.Frame(self.root, padding="40"); f.pack(fill="both", expand=True)
         
         tk.Label(f, text="Volume (Gal):").grid(row=0, column=0, sticky="w")
         tk.Entry(f, textvariable=self.vol_var, width=15, bg="#ffffcc").grid(row=0, column=1, sticky="w", pady=5)
@@ -66,54 +62,49 @@ class AquariumCommanderPro:
 
         tk.Button(f, text="RUN SAFETY & DOSAGE CALC", command=self.perform_calc, bg="#2980b9", fg="white", height=2).grid(row=5, columnspan=2, pady=20, sticky="ew")
         
-        self.res_lbl = tk.Label(f, text="Enter readings to begin.", font=("Arial", 12, "bold"), wraplength=500)
+        self.res_lbl = tk.Label(f, text="Ready.", font=("Arial", 12, "bold"), wraplength=500)
         self.res_lbl.grid(row=6, columnspan=2)
 
     def perform_calc(self):
         try:
-            p = self.p_var.get()
-            vol = float(self.vol_var.get())
-            unit = self.u_var.get()
-            curr = float(self.curr_ent.get())
-            targ = float(self.targ_ent.get())
+            p, vol, unit = self.p_var.get(), float(self.vol_var.get()), self.u_var.get()
+            curr, targ = float(self.curr_ent.get()), float(self.targ_ent.get())
 
-            # 1. AUTO-UNIT CORRECTION (Alk only)
-            if p == "Alkalinity" and unit == "dKH" and curr > 25:
-                curr = curr / 17.86
-                self.curr_ent.delete(0, tk.END)
-                self.curr_ent.insert(0, f"{curr:.2f}")
-                messagebox.showinfo("Unit Corrected", f"Detected high Alkalinity ({curr*17.86:.0f}). Converted ppm to {curr:.2f} dKH.")
-
-            # 2. CONVERT EVERYTHING TO STANDARD UNITS FOR CALC
-            std_curr = curr
-            std_targ = targ
+            # --- FIX: REAL-TIME PPM TO DKH UPDATE ---
             if p == "Alkalinity" and unit == "ppm":
-                std_curr = curr / 17.86
-                std_targ = targ / 17.86
+                converted_curr = curr / 17.86
+                converted_targ = targ / 17.86
+                # Force the UI to show the dKH equivalent so the user sees the safety check
+                self.res_lbl.config(text=f"Note: {curr}ppm is approx {converted_curr:.2f} dKH", fg="black")
+                std_curr, std_targ = converted_curr, converted_targ
+            else:
+                std_curr, std_targ = curr, targ
 
-            # 3. SAFETY CHECKS
+            # Safety Logic
             safe = self.safety_ranges[p]
             if std_curr < safe['min']:
-                msg = f"⚠️ CRITICAL LOW: Your {p} is dangerously low ({curr} {unit})!"
-                self.res_lbl.config(text=msg, fg="red")
+                self.res_lbl.config(text=f"⚠️ CRITICAL LOW: {curr} {unit} is dangerous!", fg="red")
                 return
             elif std_curr > safe['max']:
-                msg = f"⚠️ CRITICAL HIGH: Your {p} is way over target ({curr} {unit})!"
-                self.res_lbl.config(text=msg, fg="red")
+                self.res_lbl.config(text=f"⚠️ CRITICAL HIGH: {curr} {unit} is over limit!", fg="red")
                 return
 
-            # 4. CALC DOSAGE
             diff = std_targ - std_curr
             if diff <= 0:
-                self.res_lbl.config(text="STATUS: OPTIMAL. No correction needed.", fg="green")
+                self.res_lbl.config(text="STATUS: OPTIMAL", fg="green")
                 return
 
-            strength = 0.6 if p == "Alkalinity" else 1.0 # Simple baseline
-            total_ml = (diff * vol) / strength
-            self.res_lbl.config(text=f"CORRECTION: Dose {total_ml:.1f} mL total.", fg="blue")
+            # Basic dosage logic (0.6 strength for Alk)
+            total_ml = (diff * vol) / (0.6 if p == "Alkalinity" else 1.0)
+            self.res_lbl.config(text=f"DOSE: {total_ml:.1f} mL Total", fg="blue")
 
         except ValueError:
-            self.res_lbl.config(text="ERROR: Please enter valid numbers.", fg="red")
+            self.res_lbl.config(text="ERROR: Enter valid numbers", fg="red")
+
+    def on_closing(self):
+        """Forces the entire process to terminate."""
+        self.root.destroy()
+        sys.exit(0)
 
     def update_param_selection(self, e=None):
         p = self.p_var.get()
