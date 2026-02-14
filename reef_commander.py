@@ -64,7 +64,7 @@ class AquariumCommanderPro:
         frame = ttk.Frame(self.calc_tab, padding="20")
         frame.pack(fill="both", expand=True)
 
-        # 1. DEFINE VARIABLES FIRST (To avoid AttributeError)
+        # 1. DEFINE VARIABLES FIRST (Crucial fix for AttributeError)
         self.param_var = tk.StringVar(value="Alkalinity")
         self.unit_var = tk.StringVar(value="dKH")
         self.brand_var = tk.StringVar(value="Custom (Manual)")
@@ -73,6 +73,7 @@ class AquariumCommanderPro:
         tk.Label(frame, text=f"Tank: {self.settings['tank_name']}", font=("Arial", 10, "italic")).grid(row=0, column=0, columnspan=2)
         tk.Label(frame, text="Chemical Adjuster", font=("Arial", 16, "bold")).grid(row=1, column=0, columnspan=2, pady=10)
 
+        # Gauge Canvas
         self.gauge_canvas = tk.Canvas(frame, width=400, height=50, bg="#f0f0f0", highlightthickness=0)
         self.gauge_canvas.grid(row=2, column=0, columnspan=2, pady=10)
 
@@ -108,12 +109,13 @@ class AquariumCommanderPro:
         self.res_lbl = tk.Label(frame, text="", font=("Consolas", 11, "bold"), wraplength=450)
         self.res_lbl.grid(row=10, column=0, columnspan=2)
 
-        # 3. INITIAL GAUGE DRAW
+        # 3. INITIAL SETUP
         self.update_units_and_presets()
         self.draw_gauge(0)
 
     def draw_gauge(self, value):
         self.gauge_canvas.delete("all")
+        # Draw background zones
         colors = ["#e74c3c", "#f1c40f", "#2ecc71", "#f1c40f", "#e74c3c"]
         x_start = 0
         for color in colors:
@@ -123,13 +125,12 @@ class AquariumCommanderPro:
         param = self.param_var.get()
         unit = self.unit_var.get()
         
-        # Normalize PPM Alk to dKH for gauge
+        # Adjust value for visual scale
         adj_value = value / 17.86 if param == "Alkalinity" and unit == "ppm" else value
         
         r_list = self.ranges[param]["range"]
         min_v, max_v = r_list[0], r_list[5]
         
-        # Map value to pixel (0-400)
         if max_v > min_v:
             pos = ((adj_value - min_v) / (max_v - min_v)) * 400
         else:
@@ -137,7 +138,7 @@ class AquariumCommanderPro:
         pos = max(0, min(400, pos))
         
         self.gauge_canvas.create_line(pos, 5, pos, 40, fill="black", width=3)
-        self.gauge_canvas.create_text(pos, 45, text=f"{value}", font=("Arial", 8, "bold"))
+        self.gauge_canvas.create_text(pos, 45, text=f"Input: {value}", font=("Arial", 8, "bold"))
 
     def update_gauge_live(self, event=None):
         try:
@@ -176,7 +177,7 @@ class AquariumCommanderPro:
             
             if messagebox.askyesno("Log", "Log this dose?"):
                 self.save_to_csv("Dose", self.param_var.get(), total_ml)
-        except: messagebox.showerror("Error", "Check your inputs. Ensure Volume and Strength are numbers.")
+        except: messagebox.showerror("Error", "Check numeric inputs.")
 
     def build_maint_tab(self):
         frame = ttk.Frame(self.maint_tab, padding="20")
@@ -214,13 +215,10 @@ class AquariumCommanderPro:
         frame = ttk.Frame(self.settings_tab, padding="20")
         frame.pack(fill="both")
         tk.Label(frame, text="System Configuration", font=("Arial", 14, "bold")).pack(pady=10)
-        
         tk.Label(frame, text="Tank Name:").pack()
         self.name_ent = tk.Entry(frame); self.name_ent.insert(0, self.settings["tank_name"]); self.name_ent.pack(pady=5)
-        
         tk.Label(frame, text="Total Volume (Gallons):").pack()
         self.vol_ent = tk.Entry(frame); self.vol_ent.insert(0, str(self.settings["volume"])); self.vol_ent.pack(pady=5)
-        
         tk.Button(frame, text="SAVE CONFIGURATION", command=self.save_config, bg="#27ae60", fg="white").pack(pady=20)
 
     def save_config(self):
