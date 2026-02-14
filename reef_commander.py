@@ -13,7 +13,7 @@ SETTINGS_FILE = "settings.json"
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.10.8")
+        self.root.title("Aquarium Commander Pro v0.10.9")
         self.root.geometry("800x950")
 
         self.load_settings()
@@ -72,7 +72,7 @@ class AquariumCommanderPro:
         self.build_log_tab()
         self.build_settings_tab()
 
-        # Startup initialization
+        # Final UI Sync on startup to ensure dropdowns are populated
         self.update_param_selection()
 
     def load_settings(self):
@@ -197,7 +197,7 @@ class AquariumCommanderPro:
             
             check_val = curr / 17.86 if p == "Alkalinity" and u == "ppm" else curr
             if check_val > self.ranges[p]["range"][3]:
-                self.res_lbl.config(text=f"STOP: {p} is too high ({curr} {u}).", fg="#c0392b")
+                self.res_lbl.config(text=f"WARNING: {p} is too high ({curr} {u}).\nAvoid dosing to prevent precipitation.", fg="#c0392b")
                 return
 
             diff = targ - curr
@@ -208,7 +208,7 @@ class AquariumCommanderPro:
             strength = float(self.strength_ent.get())
             vol = float(self.settings["volume"])
             total_ml = (diff * vol) / strength
-            self.res_lbl.config(text=f"DOSE: {total_ml:.1f} mL Total\nRise: +{diff:.2f}", fg="#2980b9")
+            self.res_lbl.config(text=f"DOSE: {total_ml:.1f} mL Total\nRise Required: +{diff:.2f}", fg="#2980b9")
             
             if messagebox.askyesno("Log", "Log this dose?"):
                 self.save_to_csv("Dose", p, total_ml)
@@ -217,7 +217,7 @@ class AquariumCommanderPro:
     def build_maint_tab(self):
         for widget in self.maint_tab.winfo_children(): widget.destroy()
         f = ttk.Frame(self.maint_tab, padding="20"); f.pack(fill="both")
-        desk = ttk.LabelFrame(f, text=" Bulk Test Results ", padding=10); desk.pack(fill="x")
+        desk = ttk.LabelFrame(f, text=" Bulk Test Results Entry ", padding=10); desk.pack(fill="x")
         tk.Label(desk, text="Date:").grid(row=0, column=0)
         self.b_date = tk.Entry(desk); self.b_date.insert(0, datetime.now().strftime("%Y-%m-%d")); self.b_date.grid(row=0, column=1)
         tk.Label(desk, text="Alk:").grid(row=1, column=0); self.b_alk = tk.Entry(desk); self.b_alk.grid(row=1, column=1)
@@ -232,7 +232,7 @@ class AquariumCommanderPro:
             if self.b_cal.get(): self.save_to_csv("Test", "Calcium", float(self.b_cal.get()), d)
             if self.b_mag.get(): self.save_to_csv("Test", "Magnesium", float(self.b_mag.get()), d)
             messagebox.showinfo("Success", "Tests recorded.")
-        except: messagebox.showerror("Error", "Numeric values only.")
+        except: messagebox.showerror("Error", "Enter numeric values.")
 
     def build_log_tab(self):
         for widget in self.log_tab.winfo_children(): widget.destroy()
