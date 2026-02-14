@@ -1,118 +1,164 @@
-import math
-import os
+import tkinter as tk
+from tkinter import messagebox, ttk
 import csv
+import os
+import math
 from datetime import datetime
 
-# --- FILE SETUP ---
+# --- CONFIGURATION ---
 LOG_FILE = "aquarium_data.csv"
+GALLONS = 220  # You can change this to an input field later if you have multiple tanks
 
-def get_input(prompt, is_float=True):
-    val = input(prompt)
-    if not val or val.lower() == 'skip': return None
-    try:
-        return float(val) if is_float else val
-    except ValueError:
-        print("Invalid number. Press Enter to skip.")
-        return get_input(prompt, is_float)
+class AquariumCommander:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Aquarium Dosage Commander v8.0")
+        self.root.geometry("500x650")
+        
+        # Style
+        style = ttk.Style()
+        style.configure("TLabel", font=("Segoe UI", 10))
+        style.configure("TButton", font=("Segoe UI", 10))
 
-def get_last_test(param):
-    if not os.path.exists(LOG_FILE): return None
-    try:
-        with open(LOG_FILE, "r") as f:
-            reader = list(csv.reader(f))
-            for row in reversed(reader):
-                if row[2] == "Test" and row[3] == param:
-                    return float(row[4])
-    except: return None
-    return None
+        # --- TABS ---
+        self.notebook = ttk.Notebook(root)
+        self.calc_tab = ttk.Frame(self.notebook)
+        self.log_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.calc_tab, text="  Dosage Calculator  ")
+        self.notebook.add(self.log_tab, text="  Test History  ")
+        self.notebook.pack(expand=1, fill="both")
 
-def run_safety_suite(name, current, target, ph):
-    print("\n--- SAFETY ANALYSIS ---")
-    warnings = []
-    
-    if name == "Alkalinity" and ph and ph >= 8.35:
-        warnings.append(f"[!] HIGH pH ALERT: Current pH {ph} is elevated. Dosing Alkalinity now may cause precipitation.")
+        self.build_calc_tab()
+        self.build_log_tab()
 
-    last_mag = get_last_test("Magnesium")
-    if name in ["Alkalinity", "Calcium"] and (last_mag is None or last_mag < 1300):
-        mag_str = f"{last_mag} ppm" if last_mag else "Unknown"
-        warnings.append(f"[!] MAGNESIUM GUARD: Foundation is {mag_str}. If Mag is under 1300, Alk/Cal stability is at risk.")
+    def build_calc_tab(self):
+        # Title
+        tk.Label(self.calc_tab, text="Chemical Adjuster", font=("Segoe UI", 14, "bold")).pack(pady=10)
 
-    if name == "Alkalinity":
-        last_cal = get_last_test("Calcium")
-        if last_cal and last_cal > 480 and target > 10:
-            warnings.append("[!] PRECIPITATION RISK: Calcium is very high. Adding high Alkalinity could cause a 'snowstorm'.")
-    
-    limits = {"Alkalinity": 1.0, "Calcium": 20.0, "Magnesium": 100.0}
-    total_increase = target - current
-    if name in limits and total_increase > limits[name]:
-        min_days = math.ceil(total_increase / limits[name])
-        warnings.append(f"[!] SPEED LIMIT: Spread this {total_increase:.1f} unit increase over {min_days} days.")
+        # Parameter Selection
+        tk.Label(self.calc_tab, text="Select Parameter:").pack()
+        self.param_var = tk.StringVar(value="Alkalinity")
+        params = ["Alkalinity", "Calcium", "Magnesium"]
+        self.param_menu = ttk.Combobox(self.calc_tab, textvariable=self.param_var, values=params, state="readonly")
+        self.param_menu.pack(pady=5)
 
-    if not warnings:
-        print("[OK] No immediate chemical conflicts detected.")
-    else:
-        for w in warnings: print(w)
-    
-    confirm = input("\nDo you wish to proceed with these risks? (y/n): ").lower()
-    return confirm == 'y'
+        # Inputs
+        tk.Label(self.calc_tab, text="Current Level:").pack()
+        self.curr_ent = tk.Entry(self.calc_tab, justify='center')
+        self.curr_ent.pack(pady=5)
 
-def save_entry(tank, entry_type, param, value, ph=None):
-    file_exists = os.path.isfile(LOG_FILE)
-    with open(LOG_FILE, "a", newline='') as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["Timestamp", "Tank", "Type", "Parameter", "Value", "pH"])
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        writer.writerow([timestamp, tank, entry_type, param, value, ph])
+        tk.Label(self.calc_tab, text="Target Level:").pack()
+        self.targ_ent = tk.Entry(self.calc_tab, justify='center')
+        self.targ_ent.pack(pady=5)
 
-def main():
-    print("==========================================")
-    print("   AQUARIUM DOSAGE COMMANDER v7.5 (PRO)   ")
-    print("==========================================\n")
+        tk.Label(self.calc_tab, text="Product Strength (1mL adds X to 1 Gal):").pack()
+        self.strength_ent = tk.Entry(self.calc_tab, justify='center')
+        self.strength_ent.pack(pady=5)
 
-    tank_name = input("Enter Aquarium Name: ") or "My Aquarium"
-    gallons = get_input(f"Total Water Volume (Gallons): ")
-    
-    if not gallons:
-        print("Volume required to calculate dosage.")
-        return
+        tk.Label(self.calc_tab, text="Current pH (Optional):").pack()
+        self.ph_ent = tk.Entry(self.calc_tab, justify='center')
+        self.ph_ent.pack(pady=5)
 
-    while True:
-        print(f"\n[{tank_name.upper()}] 1. Record Test  2. Calculate Dose  3. Exit")
-        mode = input("Select: ")
-        if mode == "3": break
+        # Action Button
+        calc_btn = tk.Button(self.calc_tab, text="RUN SAFETY CHECK & CALCULATE", command=self.run_calc, 
+                             bg="#008080", fg="white", font=("Segoe UI", 10, "bold"), padx=10, pady=5)
+        calc_btn.pack(pady=20)
 
-        if mode == "1":
-            ph = get_input("Current pH: ")
-            param_name = input("Parameter (Alk/Cal/Mag): ")
-            val = get_input(f"Result Value: ")
-            if param_name.lower().startswith("a") and val and val > 20: val *= 0.056
-            save_entry(tank_name, "Test", param_name.capitalize(), val, ph)
-            print("Data Logged.")
+        # Output Display
+        self.result_box = tk.Text(self.calc_tab, height=10, width=55, font=("Consolas", 9), state="disabled", bg="#f0f0f0")
+        self.result_box.pack(pady=10, padx=10)
 
-        elif mode == "2":
-            params = {"1": ("Alkalinity", "dKH"), "2": ("Calcium", "ppm"), "3": ("Magnesium", "ppm")}
-            print("\n" + "\n".join([f"{k}. {v[0]}" for k, v in params.items()]))
-            choice = input("Select Parameter: ")
-            if choice not in params: continue
+    def log_message(self, message):
+        self.result_box.config(state="normal")
+        self.result_box.delete('1.0', tk.END)
+        self.result_box.insert(tk.END, message)
+        self.result_box.config(state="disabled")
+
+    def get_last_test(self, param):
+        if not os.path.exists(LOG_FILE): return None
+        try:
+            with open(LOG_FILE, "r") as f:
+                reader = list(csv.reader(f))
+                for row in reversed(reader):
+                    if row[2] == "Test" and row[3] == param: return float(row[4])
+        except: return None
+        return None
+
+    def run_calc(self):
+        try:
+            name = self.param_var.get()
+            curr = float(self.curr_ent.get())
+            targ = float(self.targ_ent.get())
+            strength = float(self.strength_ent.get())
+            ph_str = self.ph_ent.get()
+            ph = float(ph_str) if ph_str else None
+
+            # 1. Convert Alk if needed
+            if name == "Alkalinity" and curr > 20:
+                curr *= 0.056
+                self.log_message(f"Note: Converted ppm to {curr:.2f} dKH\n")
+
+            # 2. Safety Logic
+            warnings = []
+            if name == "Alkalinity" and ph and ph >= 8.5:
+                messagebox.showerror("CRITICAL", "pH is too high (8.5+)! Dosing aborted.")
+                return
             
-            name, unit = params[choice]
-            curr = get_input(f"Current {name}: ")
-            if choice == "1" and curr and curr > 20: curr *= 0.056
+            if name == "Alkalinity" and ph and ph >= 8.35:
+                warnings.append("!! High pH: Split dose into 3 parts.")
             
-            targ = get_input(f"Target {name}: ")
-            ph = get_input("Current pH (Optional): ")
+            last_mag = self.get_last_test("Magnesium")
+            if name in ["Alkalinity", "Calcium"] and (last_mag is None or last_mag < 1300):
+                warnings.append(f"!! Low/Unknown Mag ({last_mag}): Stability at risk.")
+
+            # 3. Dosage Math
+            diff = targ - curr
+            if diff <= 0:
+                self.log_message("Target reached. No dose needed.")
+                return
+
+            total_ml = (diff * GALLONS) / strength
             
-            if not run_safety_suite(name, curr, targ, ph): continue
+            # 4. Final Report
+            output = f"--- DOSAGE REPORT ---\n"
+            output += f"Total to Add: {total_ml:.1f} mL\n"
+            output += f"Status: {name} increase of {diff:.2f}\n"
+            if warnings:
+                output += "\nSAFETY WARNINGS:\n" + "\n".join(warnings)
+            
+            self.log_message(output)
+            
+            # Ask to log
+            if messagebox.askyesno("Save Dose", f"Did you dose {total_ml:.1f}mL now?"):
+                self.save_to_csv("Dose", name, total_ml, ph)
+                self.build_log_tab() # Refresh history
 
-            strength = get_input(f"Product Strength (1mL adds how many {unit} to 1 Gal?): ")
-            if all([curr, targ, strength]):
-                total_ml = ((targ - curr) * gallons) / strength
-                print(f"\n--- DOSAGE: {total_ml:.1f} mL Total ---")
-                print(f"Record this in your log if you dose today.")
+        except ValueError:
+            messagebox.showerror("Input Error", "Please enter valid numbers in the fields.")
 
-    print("\nHappy Reefing!")
+    def save_to_csv(self, type, param, val, ph):
+        file_exists = os.path.isfile(LOG_FILE)
+        with open(LOG_FILE, "a", newline='') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(["Timestamp", "Tank", "Type", "Parameter", "Value", "pH"])
+            writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), "Generic", type, param, f"{val:.2f}", ph])
+
+    def build_log_tab(self):
+        # Simple scrollable list of recent events
+        for widget in self.log_tab.winfo_children(): widget.destroy()
+        
+        tk.Label(self.log_tab, text="Recent Activity (Last 15)", font=("Segoe UI", 12, "bold")).pack(pady=10)
+        
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, "r") as f:
+                lines = f.readlines()[-15:]
+                for line in reversed(lines):
+                    tk.Label(self.log_tab, text=line.strip(), font=("Consolas", 8)).pack(anchor="w", padx=10)
+        else:
+            tk.Label(self.log_tab, text="No logs found yet.").pack()
 
 if __name__ == "__main__":
-    main()
+    root = tk.Tk()
+    app = AquariumCommander(root)
+    root.mainloop()
