@@ -10,7 +10,7 @@ SETTINGS_FILE = "settings.json"
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.11.6")
+        self.root.title("Aquarium Commander Pro v0.11.7")
         self.root.geometry("850x950")
         
         self.safety_limits = {"Alkalinity": 1.4, "Calcium": 20.0, "Magnesium": 100.0}
@@ -25,7 +25,6 @@ class AquariumCommanderPro:
             "Magnesium": {"units": ["ppm"], "target": 1350, "brands": {"Fritz RPM Liquid Magnesium": 18.0}}
         }
 
-        # --- DYNAMIC VARIABLES ---
         self.live_ph = tk.StringVar(value=str(self.settings.get("last_ph", 8.2)))
         
         self.notebook = ttk.Notebook(root)
@@ -51,7 +50,6 @@ class AquariumCommanderPro:
     def build_calc_tab(self):
         f = ttk.Frame(self.calc_tab, padding="20"); f.pack(fill="both", expand=True)
         
-        # --- THE LIVE PH METER ---
         ph_frame = tk.Frame(f, bg="#2c3e50", pady=10)
         ph_frame.grid(row=0, columnspan=3, sticky="ew", pady=(0, 20))
         tk.Label(ph_frame, text="LIVE SYSTEM pH", fg="white", bg="#2c3e50", font=("Arial", 10)).pack()
@@ -86,23 +84,20 @@ class AquariumCommanderPro:
         f = ttk.Frame(self.maint_tab, padding="20"); f.pack(fill="both")
         tk.Label(f, text="LOG TEST RESULTS", font=("Arial", 12, "bold")).pack(pady=10)
         
-        # --- FULL PARAMETER INPUTS ---
         grid = ttk.Frame(f); grid.pack()
         tk.Label(grid, text="Alkalinity:").grid(row=0, column=0, pady=2)
         self.m_alk = tk.Entry(grid); self.m_alk.grid(row=0, column=1)
-        
         tk.Label(grid, text="Calcium:").grid(row=1, column=0, pady=2)
         self.m_cal = tk.Entry(grid); self.m_cal.grid(row=1, column=1)
-        
         tk.Label(grid, text="Magnesium:").grid(row=2, column=0, pady=2)
         self.m_mag = tk.Entry(grid); self.m_mag.grid(row=2, column=1)
-        
         tk.Label(grid, text="pH Value:").grid(row=3, column=0, pady=2)
         self.m_ph_log = tk.Entry(grid, textvariable=self.live_ph); self.m_ph_log.grid(row=3, column=1)
         
         tk.Button(f, text="SAVE TO HISTORY", command=self.save_maint, bg="#8e44ad", fg="white", font=("Arial", 10, "bold")).pack(pady=15)
         
-        tk.Separator(f, orient='horizontal').pack(fill='x', pady=10)
+        # FIXED: Changed tk.Separator to ttk.Separator
+        ttk.Separator(f, orient='horizontal').pack(fill='x', pady=10)
         
         tk.Label(f, text="TANK SETTINGS", font=("Arial", 10, "bold")).pack(pady=5)
         tk.Label(f, text="Volume (Gal):").pack()
@@ -112,16 +107,15 @@ class AquariumCommanderPro:
     def save_maint(self):
         d = datetime.now().strftime("%Y-%m-%d %H:%M")
         logged = False
-        if self.m_alk.get(): 
-            self.save_to_csv(d, "Test", "Alk", self.m_alk.get())
-            logged = True
-        if self.m_cal.get(): 
-            self.save_to_csv(d, "Test", "Cal", self.m_cal.get())
-            logged = True
-        if self.m_mag.get(): 
-            self.save_to_csv(d, "Test", "Mag", self.m_mag.get())
-            logged = True
-        if self.live_ph.get(): 
+        data = [self.m_alk.get(), self.m_cal.get(), self.m_mag.get()]
+        names = ["Alk", "Cal", "Mag"]
+        
+        for name, val in zip(names, data):
+            if val:
+                self.save_to_csv(d, "Test", name, val)
+                logged = True
+        
+        if self.live_ph.get():
             self.save_to_csv(d, "Test", "pH", self.live_ph.get())
             logged = True
             
@@ -149,8 +143,6 @@ class AquariumCommanderPro:
             curr, targ = float(self.curr_ent.get()), float(self.targ_ent.get())
             strength = self.ranges[p]["brands"][self.b_var.get()]
             
-            # --- AUTO PPM CONVERSION ---
-            # If user types "71" for Alk, detect PPM and adjust
             is_ppm = False
             if p == "Alkalinity" and curr > 20:
                 strength *= 17.86
@@ -166,7 +158,7 @@ class AquariumCommanderPro:
             days = max(1, int(diff / limit) + (1 if diff % limit > 0 else 0))
             
             ph_val = float(self.live_ph.get())
-            if ph_val >= 8.45: days = max(days, 6) # Slow down if pH is high
+            if ph_val >= 8.45: days = max(days, 6)
             
             daily_ml = total_ml / days
             msg = f"TOTAL DOSE: {total_ml:.1f} mL\nDaily: {daily_ml:.1f} mL over {days} days"
