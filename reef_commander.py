@@ -6,19 +6,17 @@ from datetime import datetime
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.13.9")
+        self.root.title("Aquarium Commander Pro v0.14.0")
         
         # --- UI LOCKDOWN ---
         self.root.geometry("900x800")
         self.root.resizable(False, False) 
-        
-        # Hard Kill Process on Exit
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
         self.log_file = "reef_logs.csv"
         self.init_csv()
 
-        # Data & Constants
+        # Concentrations (Impact of 1mL in 1 Gal)
         self.brand_data = {
             "ESV B-Ionic Alk (Part 1)": 1.4,
             "Fritz RPM Liquid Alk": 1.4,
@@ -33,17 +31,20 @@ class AquariumCommanderPro:
             "Magnesium": {"units": ["ppm"], "target": 1350, "brands": ["Fritz RPM Liquid Mag"]}
         }
 
-        # Variables with Traces for Auto-Switching
+        # App Variables
         self.vol_var = tk.StringVar()
         self.p_var = tk.StringVar(value="Alkalinity")
         self.u_var = tk.StringVar()
         self.b_var = tk.StringVar()
         self.curr_val_var = tk.StringVar()
+        self.targ_val_var = tk.StringVar()
+        self.custom_strength = tk.StringVar()
         
-        # TRACE: Watch the current reading for high values
+        # Traces
         self.curr_val_var.trace_add("write", self.handle_unit_auto_switch)
+        self.u_var.trace_add("write", self.sync_target_unit)
         
-        # UI Layout
+        # UI
         self.notebook = ttk.Notebook(root)
         self.tabs = {name: ttk.Frame(self.notebook) for name in ["Dosage", "Maintenance", "History", "Mix Guide"]}
         for name, frame in self.tabs.items(): 
@@ -62,57 +63,79 @@ class AquariumCommanderPro:
                 csv.writer(f).writerow(["Timestamp", "Parameter", "Value"])
 
     def handle_unit_auto_switch(self, *args):
-        """Auto-flips from dKH to ppm if value > 25."""
+        """Switch dKH to ppm if value > 25."""
         try:
             val = float(self.curr_val_var.get())
             if self.p_var.get() == "Alkalinity" and self.u_var.get() == "dKH" and val > 25:
                 self.u_var.set("ppm")
-        except ValueError:
-            pass
+        except: pass
+
+    def sync_target_unit(self, *args):
+        """Updates Target Goal value when Unit changes."""
+        p = self.p_var.get()
+        u = self.u_var.get()
+        base_target = self.ranges[p]["target"]
+        
+        if p == "Alkalinity":
+            if u == "ppm":
+                self.targ_val_var.set(f"{round(base_target * 17.86)}")
+            else:
+                self.targ_val_var.set(str(base_target))
+        else:
+            self.targ_val_var.set(str(base_target))
 
     def build_dosage(self):
-        # Using a main frame that fills the tab space
-        f = ttk.Frame(self.tabs["Dosage"], padding="50")
+        f = ttk.Frame(self.tabs["Dosage"], padding="40")
         f.pack(fill="both", expand=True)
-        f.columnconfigure(1, weight=1) # Allow column 1 to expand
+        f.columnconfigure(1, weight=1)
 
-        # Styling for larger text
-        lbl_font = ("Arial", 14, "bold")
-        ent_font = ("Arial", 14)
+        l_font, e_font = ("Arial", 14, "bold"), ("Arial", 14)
 
-        tk.Label(f, text="Tank Volume (Gal):", font=lbl_font).grid(row=0, column=0, sticky="w", pady=15)
-        tk.Entry(f, textvariable=self.vol_var, font=ent_font, bg="#ffffcc").grid(row=0, column=1, sticky="ew")
+        tk.Label(f, text="Volume (Gal):", font=l_font).grid(row=0, column=0, sticky="w", pady=10)
+        tk.Entry(f, textvariable=self.vol_var, font=e_font, bg="#ffffcc").grid(row=0, column=1, sticky="ew")
 
-        tk.Label(f, text="Parameter:", font=lbl_font).grid(row=1, column=0, sticky="w", pady=15)
-        self.p_menu = ttk.Combobox(f, textvariable=self.p_var, state="readonly", font=ent_font)
+        tk.Label(f, text="Category:", font=l_font).grid(row=1, column=0, sticky="w", pady=10)
+        self.p_menu = ttk.Combobox(f, textvariable=self.p_var, values=list(self.ranges.keys()), state="readonly", font=e_font)
         self.p_menu.grid(row=1, column=1, sticky="ew")
         self.p_menu.bind("<<ComboboxSelected>>", self.update_param_selection)
 
-        tk.Label(f, text="Unit:", font=lbl_font).grid(row=2, column=0, sticky="w", pady=15)
-        self.u_menu = ttk.Combobox(f, textvariable=self.u_var, state="readonly", font=ent_font)
+        tk.Label(f, text="Unit:", font=l_font).grid(row=2, column=0, sticky="w", pady=10)
+        self.u_menu = ttk.Combobox(f, textvariable=self.u_var, state="readonly", font=e_font)
         self.u_menu.grid(row=2, column=1, sticky="ew")
 
-        tk.Label(f, text="Current Reading:", font=lbl_font).grid(row=3, column=0, sticky="w", pady=15)
-        tk.Entry(f, textvariable=self.curr_val_var, font=ent_font).grid(row=3, column=1, sticky="ew")
+        tk.Label(f, text="Product:", font=l_font).grid(row=3, column=0, sticky="w", pady=10)
+        self.b_menu = ttk.Combobox(f, textvariable=self.b_var, state="readonly", font=e_font)
+        self.b_menu.grid(row=3, column=1, sticky="ew")
 
-        tk.Label(f, text="Target Goal:", font=lbl_font).grid(row=4, column=0, sticky="w", pady=15)
-        self.targ_ent = tk.Entry(f, font=ent_font)
-        self.targ_ent.grid(row=4, column=1, sticky="ew")
+        tk.Label(f, text="Current Reading:", font=l_font).grid(row=4, column=0, sticky="w", pady=10)
+        tk.Entry(f, textvariable=self.curr_val_var, font=e_font).grid(row=4, column=1, sticky="ew")
 
-        tk.Button(f, text="CALCULATE DOSAGE", command=self.perform_calc, bg="#2c3e50", fg="white", font=("Arial", 14, "bold"), height=2).grid(row=5, columnspan=2, pady=30, sticky="ew")
+        tk.Label(f, text="Target Goal:", font=l_font).grid(row=5, column=0, sticky="w", pady=10)
+        tk.Entry(f, textvariable=self.targ_val_var, font=e_font).grid(row=5, column=1, sticky="ew")
+
+        tk.Label(f, text="Custom Strength (Opt):", font=("Arial", 10)).grid(row=6, column=0, sticky="w")
+        tk.Entry(f, textvariable=self.custom_strength, font=("Arial", 10)).grid(row=6, column=1, sticky="w")
+
+        tk.Button(f, text="CALCULATE DOSAGE", command=self.perform_calc, bg="#2c3e50", fg="white", font=("Arial", 14, "bold"), height=2).grid(row=7, columnspan=2, pady=25, sticky="ew")
         
-        self.res_lbl = tk.Label(f, text="Ready", font=("Arial", 16, "bold"), fg="#2980b9", wraplength=700)
-        self.res_lbl.grid(row=6, columnspan=2, pady=20)
+        self.res_lbl = tk.Label(f, text="---", font=("Arial", 18, "bold"), fg="#2980b9", wraplength=700)
+        self.res_lbl.grid(row=8, columnspan=2, pady=10)
 
     def perform_calc(self):
         try:
             p, vol, unit = self.p_var.get(), float(self.vol_var.get()), self.u_var.get()
-            curr, targ = float(self.curr_val_var.get()), float(self.targ_ent.get())
-
+            curr, targ = float(self.curr_val_var.get()), float(self.targ_val_var.get())
+            
+            # Unit standardization
             std_curr = curr / 17.86 if (p == "Alkalinity" and unit == "ppm") else curr
             std_targ = targ / 17.86 if (p == "Alkalinity" and unit == "ppm") else targ
 
-            strength = self.brand_data.get(self.b_var.get(), 1.0)
+            # Concentration selection
+            if self.custom_strength.get():
+                strength = float(self.custom_strength.get())
+            else:
+                strength = self.brand_data.get(self.b_var.get(), 1.0)
+
             total_ml = ((std_targ - std_curr) * vol) / strength
             
             if total_ml <= 0:
@@ -122,13 +145,22 @@ class AquariumCommanderPro:
         except:
             self.res_lbl.config(text="ERROR: Check Inputs", fg="red")
 
+    def update_param_selection(self, e=None):
+        p = self.p_var.get()
+        self.u_menu['values'] = self.ranges[p]["units"]
+        self.u_menu.current(0)
+        self.b_menu['values'] = self.ranges[p]["brands"]
+        self.b_menu.current(0)
+        self.sync_target_unit()
+
     def build_maint(self):
         f = ttk.Frame(self.tabs["Maintenance"], padding="50"); f.pack(fill="both")
         self.m_entries = {}
         for i, p in enumerate(["Alkalinity", "Calcium", "Magnesium"]):
-            tk.Label(f, text=f"{p}:", font=("Arial", 12)).grid(row=i, column=0, pady=15, sticky="w")
-            e = tk.Entry(f, font=("Arial", 12)); e.grid(row=i, column=1, padx=20, sticky="ew"); self.m_entries[p] = e
-        tk.Button(f, text="LOG DATA", command=self.save_data, bg="#27ae60", fg="white", font=("Arial", 12, "bold")).grid(row=4, columnspan=2, pady=30, sticky="ew")
+            tk.Label(f, text=f"{p}:", font=("Arial", 14)).grid(row=i, column=0, pady=15, sticky="w")
+            e = tk.Entry(f, font=("Arial", 14)); e.grid(row=i, column=1, padx=20, sticky="ew")
+            self.m_entries[p] = e
+        tk.Button(f, text="LOG DATA", command=self.save_data, bg="#27ae60", fg="white", font=("Arial", 14, "bold")).grid(row=4, columnspan=2, pady=40, sticky="ew")
 
     def save_data(self):
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -137,34 +169,27 @@ class AquariumCommanderPro:
                 writer = csv.writer(f)
                 for p, ent in self.m_entries.items():
                     if ent.get(): writer.writerow([ts, p, ent.get()])
-            messagebox.showinfo("Success", "Logs updated.")
+            messagebox.showinfo("Success", "Data Saved.")
             self.refresh_hist()
-        except:
-            messagebox.showerror("Error", "File error.")
-
-    def update_param_selection(self, e=None):
-        p = self.p_var.get()
-        self.u_menu['values'] = self.ranges[p]["units"]; self.u_menu.current(0)
-        self.targ_ent.delete(0, tk.END); self.targ_ent.insert(0, str(self.ranges[p]["target"]))
+        except: messagebox.showerror("Error", "Save Failed.")
 
     def build_history(self):
         f = self.tabs["History"]
-        self.hist_txt = tk.Text(f, font=("Courier New", 12), bg="#f8f9fa"); self.hist_txt.pack(fill="both", expand=True, padx=20, pady=20)
+        self.hist_txt = tk.Text(f, font=("Courier New", 12)); self.hist_txt.pack(fill="both", expand=True, padx=20, pady=20)
         tk.Button(f, text="REFRESH", command=self.refresh_hist).pack(pady=10)
-
-    def build_mix(self):
-        f = self.tabs["Mix Guide"]
-        guide = "BULK RECIPES (1 GAL)\n" + ("="*20) + "\nAlk: 2 Cups Soda Ash\nCal: 2.5 Cups Calcium Chloride\nMag: 5 Cups Magnesium Chloride"
-        tk.Label(f, text=guide, font=("Courier New", 16, "bold"), justify="left", padx=50, pady=100).pack()
 
     def refresh_hist(self):
         if os.path.exists(self.log_file):
             with open(self.log_file, "r") as f:
                 self.hist_txt.delete("1.0", tk.END); self.hist_txt.insert(tk.END, f.read())
 
+    def build_mix(self):
+        f = self.tabs["Mix Guide"]
+        tk.Label(f, text="MIXING RECIPES (1 GAL)\nAlk: 2 Cups Soda Ash\nCal: 2.5 Cups Calcium Chloride", font=("Arial", 16, "bold")).pack(pady=100)
+
     def hard_exit(self):
         self.root.destroy()
-        os._exit(0) # Forced OS-level termination
+        os._exit(0)
 
 if __name__ == "__main__":
     root = tk.Tk(); app = AquariumCommanderPro(root); root.mainloop()
