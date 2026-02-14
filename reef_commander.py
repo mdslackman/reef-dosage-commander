@@ -8,17 +8,17 @@ from datetime import datetime
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.13.5")
+        self.root.title("Aquarium Commander Pro v0.13.6")
         self.root.geometry("1100x950")
         
-        # 1. Kill process on exit (Zombie Fix)
+        # --- CRITICAL: ZOMBIE PROCESS KILLER ---
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
-        # 2. Data Persistence Check
+        # --- DATA INITIALIZATION ---
         self.log_file = "reef_logs.csv"
         self.init_csv()
 
-        # 3. Product & Brand Concentrations
+        # --- PRODUCT & UNIT DATA ---
         self.brand_data = {
             "ESV B-Ionic Alk (Part 1)": 1.4,
             "Fritz RPM Liquid Alk": 1.4,
@@ -36,13 +36,18 @@ class AquariumCommanderPro:
         self.vol_var = tk.StringVar(); self.live_ph = tk.StringVar()
         self.p_var = tk.StringVar(value="Alkalinity"); self.u_var = tk.StringVar(); self.b_var = tk.StringVar()
         
-        # UI Setup
+        # --- UI ARCHITECTURE ---
         self.notebook = ttk.Notebook(root)
         self.tabs = {name: ttk.Frame(self.notebook) for name in ["Dosage", "Maintenance", "Trends", "Mix Guide", "History"]}
-        for name, frame in self.tabs.items(): self.notebook.add(frame, text=f" {name} ")
+        for name, frame in self.tabs.items(): 
+            self.notebook.add(frame, text=f" {name} ")
         self.notebook.pack(expand=1, fill="both")
         
-        self.build_dosage(); self.build_maint(); self.build_trends(); self.build_mix(); self.build_history()
+        self.build_dosage()
+        self.build_maint()
+        self.build_trends()
+        self.build_mix()
+        self.build_history()
         self.update_param_selection()
 
     def init_csv(self):
@@ -52,10 +57,10 @@ class AquariumCommanderPro:
 
     def build_dosage(self):
         f = ttk.Frame(self.tabs["Dosage"], padding="30"); f.pack(fill="both", expand=True)
+        
         tk.Label(f, text="Tank Volume (Gal):", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky="w")
         tk.Entry(f, textvariable=self.vol_var, width=15, bg="#ffffcc").grid(row=0, column=1, sticky="w", pady=5)
 
-        # Standard Menus
         for i, (txt, var) in enumerate([("Parameter:", self.p_var), ("Unit:", self.u_var), ("Product:", self.b_var)]):
             tk.Label(f, text=txt).grid(row=i+1, column=0, sticky="w")
             cb = ttk.Combobox(f, textvariable=var, state="readonly")
@@ -66,37 +71,41 @@ class AquariumCommanderPro:
             if txt == "Unit:": self.u_menu = cb
             if txt == "Product:": self.b_menu = cb
 
-        self.curr_ent = tk.Entry(f); self.curr_ent.grid(row=4, column=1, sticky="ew", pady=5)
         tk.Label(f, text="Current Reading:").grid(row=4, column=0, sticky="w")
-        
-        self.targ_ent = tk.Entry(f); self.targ_ent.grid(row=5, column=1, sticky="ew", pady=5)
+        self.curr_ent = tk.Entry(f); self.curr_ent.grid(row=4, column=1, sticky="ew", pady=5)
+
         tk.Label(f, text="Target Goal:").grid(row=5, column=0, sticky="w")
+        self.targ_ent = tk.Entry(f); self.targ_ent.grid(row=5, column=1, sticky="ew", pady=5)
+
+        tk.Label(f, text="Strength Override (Opt):").grid(row=6, column=0, sticky="w")
+        self.strength_ent = tk.Entry(f); self.strength_ent.grid(row=6, column=1, sticky="ew", pady=5)
 
         tk.Button(f, text="CALCULATE DOSE", command=self.perform_calc, bg="#2980b9", fg="white", height=2).grid(row=7, columnspan=2, pady=20, sticky="ew")
-        self.res_lbl = tk.Label(f, text="Ready", font=("Arial", 12, "bold"), wraplength=500); self.res_lbl.grid(row=8, columnspan=2)
+        self.res_lbl = tk.Label(f, text="Awaiting Input...", font=("Arial", 12, "bold"), wraplength=500); self.res_lbl.grid(row=8, columnspan=2)
 
     def perform_calc(self):
         try:
             p, vol, unit = self.p_var.get(), float(self.vol_var.get()), self.u_var.get()
             curr, targ = float(self.curr_ent.get()), float(self.targ_ent.get())
 
-            # PPM to dKH logic
+            # PPM to dKH Live Update Fix
             if p == "Alkalinity" and unit == "dKH" and curr > 25:
                 curr = curr / 17.86
                 self.curr_ent.delete(0, tk.END); self.curr_ent.insert(0, f"{curr:.2f}")
+                messagebox.showinfo("Unit Corrected", f"Converted {curr*17.86:.0f}ppm to {curr:.2f} dKH")
 
             std_curr = curr / 17.86 if (p == "Alkalinity" and unit == "ppm") else curr
             std_targ = targ / 17.86 if (p == "Alkalinity" and unit == "ppm") else targ
 
-            strength = self.brand_data.get(self.b_var.get(), 1.0)
+            strength = float(self.strength_ent.get()) if self.strength_ent.get() else self.brand_data.get(self.b_var.get(), 1.0)
             total_ml = ((std_targ - std_curr) * vol) / strength
             
             if total_ml <= 0:
                 self.res_lbl.config(text="Reading is at or above target.", fg="green")
             else:
-                self.res_lbl.config(text=f"Total Dose: {total_ml:.1f} mL", fg="blue")
+                self.res_lbl.config(text=f"Total Dose Required: {total_ml:.1f} mL\n({self.b_var.get()})", fg="blue")
         except:
-            self.res_lbl.config(text="Error: Check Inputs", fg="red")
+            self.res_lbl.config(text="Error: Verify all numbers and Volume.", fg="red")
 
     def build_maint(self):
         f = ttk.Frame(self.tabs["Maintenance"], padding="30"); f.pack()
@@ -116,10 +125,10 @@ class AquariumCommanderPro:
                 for p, ent in self.m_entries.items():
                     if ent.get(): writer.writerow([ts, p, ent.get()])
                 if self.live_ph.get(): writer.writerow([ts, "pH", self.live_ph.get()])
-            messagebox.showinfo("Success", "Logs saved.")
+            messagebox.showinfo("Success", "Logs updated successfully.")
             self.refresh_hist()
         except:
-            messagebox.showerror("Error", "Could not save log file.")
+            messagebox.showerror("Error", "Could not write to log file.")
 
     def update_param_selection(self, e=None):
         p = self.p_var.get()
@@ -128,11 +137,11 @@ class AquariumCommanderPro:
         self.targ_ent.delete(0, tk.END); self.targ_ent.insert(0, str(self.ranges[p]["target"]))
 
     def build_trends(self):
-        # Trends logic for actual graphing
-        self.fig, self.ax = plt.subplots(figsize=(5, 4))
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.tabs["Trends"])
+        f = self.tabs["Trends"]
+        self.fig, self.ax = plt.subplots(figsize=(6, 4))
+        self.canvas = FigureCanvasTkAgg(self.fig, master=f)
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
-        tk.Button(self.tabs["Trends"], text="Update Graph", command=self.update_graph).pack()
+        tk.Button(f, text="Generate/Refresh Graph", command=self.update_graph).pack(pady=10)
 
     def update_graph(self):
         if not os.path.exists(self.log_file): return
@@ -141,15 +150,26 @@ class AquariumCommanderPro:
             reader = csv.reader(f); next(reader)
             for row in reader:
                 if row[1] == self.p_var.get(): data.append(float(row[2]))
-        self.ax.clear(); self.ax.plot(data, marker='o'); self.canvas.draw()
+        
+        self.ax.clear()
+        if data:
+            self.ax.plot(data, marker='o', linestyle='-', color='#2980b9')
+            self.ax.set_title(f"{self.p_var.get()} History")
+        else:
+            self.ax.text(0.5, 0.5, 'No data for this parameter yet', ha='center')
+        self.canvas.draw()
 
     def build_mix(self):
-        txt = "MIXING GUIDE (1 GALLON RO/DI)\n\nAlk: 2 Cups Soda Ash\nCal: 2.5 Cups Calcium Chloride\nMag: 5 Cups Magnesium Chloride"
-        tk.Label(self.tabs["Mix Guide"], text=txt, font=("Courier", 12), justify="left", relief="sunken", padx=20, pady=20).pack(pady=40)
+        txt = "BULK MIXING RECIPES (1 GALLON RO/DI)\n\n" \
+              "ALKALINITY: Mix 2 cups (400g) Soda Ash\n" \
+              "CALCIUM: Mix 2.5 cups (500g) Calcium Chloride\n" \
+              "MAGNESIUM: Mix 5 cups (1000g) Magnesium Chloride"
+        tk.Label(self.tabs["Mix Guide"], text=txt, font=("Courier", 12), justify="left", relief="ridge", padx=20, pady=20).pack(pady=40)
 
     def build_history(self):
-        self.hist_txt = tk.Text(self.tabs["History"], height=20); self.hist_txt.pack(fill="both", expand=True)
-        tk.Button(self.tabs["History"], text="Refresh", command=self.refresh_hist).pack()
+        f = self.tabs["History"]
+        self.hist_txt = tk.Text(f, height=25, font=("Courier", 10)); self.hist_txt.pack(fill="both", expand=True)
+        tk.Button(f, text="Manually Refresh Log", command=self.refresh_hist).pack(pady=5)
 
     def refresh_hist(self):
         if os.path.exists(self.log_file):
@@ -157,6 +177,7 @@ class AquariumCommanderPro:
                 self.hist_txt.delete("1.0", tk.END); self.hist_txt.insert(tk.END, f.read())
 
     def on_closing(self):
+        """Standard exit and hard process termination."""
         self.root.destroy()
         sys.exit(0)
 
