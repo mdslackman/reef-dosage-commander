@@ -11,3 +11,6 @@ A Python tool for reef aquarium water chemistry management.
 1. Ensure Python 3.x is installed.
 2. Run `python reef_commander.py`.
 3. Follow the on-screen prompts to log data or calculate doses.
+
+### Change Log:
+2/14 8am Pacific: Added Simple GUI
