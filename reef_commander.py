@@ -10,7 +10,7 @@ SETTINGS_FILE = "settings.json"
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.11.7")
+        self.root.title("Aquarium Commander Pro v0.11.8")
         self.root.geometry("850x950")
         
         self.safety_limits = {"Alkalinity": 1.4, "Calcium": 20.0, "Magnesium": 100.0}
@@ -50,6 +50,7 @@ class AquariumCommanderPro:
     def build_calc_tab(self):
         f = ttk.Frame(self.calc_tab, padding="20"); f.pack(fill="both", expand=True)
         
+        # --- LIVE PH METER (Visual Display) ---
         ph_frame = tk.Frame(f, bg="#2c3e50", pady=10)
         ph_frame.grid(row=0, columnspan=3, sticky="ew", pady=(0, 20))
         tk.Label(ph_frame, text="LIVE SYSTEM pH", fg="white", bg="#2c3e50", font=("Arial", 10)).pack()
@@ -95,7 +96,7 @@ class AquariumCommanderPro:
         
         tk.Button(f, text="SAVE TO HISTORY", command=self.save_maint, bg="#8e44ad", fg="white", font=("Arial", 10, "bold")).pack(pady=15)
         
-        # FIXED: Changed tk.Separator to ttk.Separator
+        # --- FIXED SEPARATOR ---
         ttk.Separator(f, orient='horizontal').pack(fill='x', pady=10)
         
         tk.Label(f, text="TANK SETTINGS", font=("Arial", 10, "bold")).pack(pady=5)
@@ -137,7 +138,7 @@ class AquariumCommanderPro:
             curr, targ = float(self.curr_ent.get()), float(self.targ_ent.get())
             strength = self.ranges[p]["brands"][self.b_var.get()]
             
-            # Auto-detect PPM for Alkalinity
+            # 71 ppm vs 8.5 dKH Detection
             is_ppm = False
             if p == "Alkalinity" and curr > 20:
                 strength *= 17.86
@@ -152,6 +153,7 @@ class AquariumCommanderPro:
             
             days = max(1, int(diff / limit) + (1 if diff % limit > 0 else 0))
             
+            # pH Safety Override
             ph_val = float(self.live_ph.get())
             if ph_val >= 8.45: days = max(days, 6)
             
@@ -159,7 +161,7 @@ class AquariumCommanderPro:
             if ph_val >= 8.45: msg += f"\n\n⚠️ HIGH pH DETECTED: {ph_val}\nSlowing dose to protect system."
             
             self.res_lbl.config(text=msg, fg="#c0392b" if ph_val >= 8.45 or days > 1 else "#2980b9")
-        except: messagebox.showerror("Error", "Invalid numeric values.")
+        except: messagebox.showerror("Error", "Check numeric values.")
 
     def save_to_csv(self, date, type, param, val):
         with open(LOG_FILE, "a", newline='') as f:
