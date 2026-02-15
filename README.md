@@ -1,6 +1,7 @@
 🌊 Aquarium Commander Pro v0.15.7
 
 Aquarium Commander Pro is a comprehensive desktop utility designed for saltwater reef hobbyists who prioritize stability. It combines chemical mathematics, biological export tracking, and predictive forecasting to help you maintain a thriving ecosystem.
+
 🚀 Core Functionality
 1. Action Plan (The Dosing Engine)
 
