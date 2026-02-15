@@ -1,4 +1,3 @@
-This README is designed to act as the official manual for Aquarium Commander Pro v0.15.7. It covers everything from basic chemical logging to the advanced biological tracking and predictive algorithms we've built.
 🌊 Aquarium Commander Pro v0.15.7
 
 Aquarium Commander Pro is a comprehensive desktop utility designed for saltwater reef hobbyists who prioritize stability. It combines chemical mathematics, biological export tracking, and predictive forecasting to help you maintain a thriving ecosystem.
