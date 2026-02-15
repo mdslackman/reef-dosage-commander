@@ -8,7 +8,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.15.5")
+        self.root.title("Aquarium Commander Pro v0.15.7")
         self.root.geometry("1150x980")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -23,7 +23,6 @@ class AquariumCommanderPro:
             "Generic Carbon (NoPox)": 3.0
         }
         
-        # Ranges with multi-tier zones
         self.ranges = {
             "Alkalinity": {"target": 8.5, "low": 7.8, "high": 9.2, "crit_low": 7.0, "crit_high": 11.5, "units": ["dKH", "ppm"]},
             "Calcium": {"target": 420, "low": 400, "high": 440, "crit_low": 350, "crit_high": 500, "units": ["ppm"]},
@@ -72,8 +71,9 @@ class AquariumCommanderPro:
         with open(self.config_file, "w") as f: f.write(self.vol_var.get())
 
     def on_tab_change(self, event):
-        if self.notebook.tab(self.notebook.select(), "text").strip() == "Trends":
-            self.refresh_all_graphs()
+        tab_name = self.notebook.tab(self.notebook.select(), "text").strip()
+        if tab_name == "Trends": self.refresh_all_graphs()
+        if tab_name == "History": self.refresh_hist()
 
     def handle_unit_auto_switch(self, *args):
         try:
@@ -131,8 +131,12 @@ class AquariumCommanderPro:
         tk.Entry(row_ph, textvariable=self.ph_fuge_var).pack(side="right", expand=True, fill="x")
 
         tk.Button(f, text="CALCULATE ACTION PLAN", command=self.perform_calc, bg="#1a252f", fg="white", font=("Arial", 11, "bold"), height=2).pack(fill="x", pady=15)
+        
+        # STATUS LABELS (No Popups)
         self.res_lbl = tk.Label(f, text="---", font=("Arial", 12, "bold"), fg="#2980b9", justify="center", wraplength=600)
         self.res_lbl.pack(pady=5)
+        self.status_log_lbl = tk.Label(f, text="", font=("Arial", 9, "italic"), fg="#27ae60")
+        self.status_log_lbl.pack()
 
     def perform_calc(self):
         try:
@@ -140,68 +144,64 @@ class AquariumCommanderPro:
             curr, targ = float(self.curr_val_var.get()), float(self.targ_val_var.get())
             strength = float(self.custom_str.get()) if self.custom_str.get() else self.brand_data.get(self.b_var.get(), 1.0)
             
-            if p == "Salinity":
-                if curr > targ:
-                    rodi = (vol * (curr - targ)) / targ
-                    self.res_lbl.config(text=f"DILUTION: Replace {rodi:.2f}gal with RODI.", fg="#e67e22")
-                else:
-                    salt = (targ - curr) * vol * 130
-                    self.res_lbl.config(text=f"SALINITY UP: Add {salt:.0f}g salt slowly.", fg="#2980b9")
-                return
-
-            msg = ""
-            if p == "Alkalinity" and self.ph_fuge_var.get() and float(self.ph_fuge_var.get()) >= 8.4:
-                msg = "\n⚠️ ALERT: pH high. Split dose or use Bicarbonate."
-
             std_curr = curr / (17.86 if (p == "Alkalinity" and self.u_var.get() == "ppm") else 1)
             std_targ = targ / (17.86 if (p == "Alkalinity" and self.u_var.get() == "ppm") else 1)
             total_ml = ((std_targ - std_curr) * vol) / strength
             
-            if total_ml <= 0:
+            if p == "Salinity":
+                res_txt = f"Replace {(vol * (curr-targ))/targ:.2f}gal with RODI." if curr > targ else f"Add {((targ-curr)*vol*130):.0f}g salt."
+                self.res_lbl.config(text=res_txt, fg="#e67e22")
+            elif total_ml <= 0:
                 self.res_lbl.config(text="LEVELS OPTIMAL", fg="green")
             else:
                 days = 7 if (total_ml > 95 or abs(std_targ - std_curr) > 1.0) else 1
                 forecast = (datetime.now() + timedelta(days=days)).strftime("%b %d")
-                self.res_lbl.config(text=f"TOTAL: {total_ml:.1f} mL\n✅ DOSE: {total_ml/days:.1f} mL/day\n🎯 PROJECTED TARGET DATE: {forecast}" + msg, fg="#c0392b")
+                self.res_lbl.config(text=f"DOSE: {total_ml/days:.1f} mL/day | TARGET: {forecast}", fg="#c0392b")
+                
+                # SILENT AUTO-LOG (LOCKED)
+                self.silent_log(f"Dose {p}", f"{total_ml/days:.1f}", "mL/day")
+                self.status_log_lbl.config(text=f"✅ DOSE CALCULATION LOGGED AND LOCKED TO HISTORY")
+
         except: self.res_lbl.config(text="ERROR: Check Inputs", fg="red")
+
+    def silent_log(self, param, val, unit):
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+        with open(self.log_file, "a", newline="") as f:
+            csv.writer(f).writerow([ts, param, val, unit])
 
     def build_maint(self):
         f = ttk.Frame(self.tabs["Maintenance"], padding="20"); f.pack(fill="both")
         self.m_entries = {}
-        
         for g_name, params in [("Core Elements", ["Alkalinity", "Calcium", "Magnesium"]), ("Nutrients", ["Nitrate", "Phosphate"]), ("Environment", ["Salinity", "Temperature"])]:
             lf = ttk.LabelFrame(f, text=f" {g_name} ", padding=10); lf.pack(fill="x", pady=4)
             for p in params:
                 row = ttk.Frame(lf); row.pack(fill="x", pady=2)
                 tk.Label(row, text=p, font=("Arial", 9, "bold"), width=15, anchor="w").pack(side="left")
-                var = self.m_alk_entry_var if p == "Alkalinity" else None
-                e = tk.Entry(row, textvariable=var)
+                e = tk.Entry(row, textvariable=(self.m_alk_entry_var if p == "Alkalinity" else None))
                 e.pack(side="left", expand=True, fill="x")
-                
+                u_val = self.m_u_var if p == "Alkalinity" else tk.StringVar(value=self.ranges[p]["units"][0])
                 if p == "Alkalinity":
-                    cb = ttk.Combobox(row, textvariable=self.m_u_var, values=["dKH", "ppm"], state="readonly", width=6)
-                    cb.pack(side="left", padx=5); u_val = self.m_u_var
+                    ttk.Combobox(row, textvariable=u_val, values=["dKH", "ppm"], state="readonly", width=6).pack(side="left", padx=5)
                 else:
-                    u_val = tk.StringVar(value=self.ranges[p]["units"][0])
                     tk.Label(row, text=u_val.get(), width=6, font=("Arial", 8, "italic")).pack(side="left", padx=5)
                 self.m_entries[p] = (e, u_val)
-
-        fuge_f = ttk.LabelFrame(f, text=" Biological Events ", padding=10)
-        fuge_f.pack(fill="x", pady=5)
-        tk.Checkbutton(fuge_f, text="Harvested Macroalgae Today", variable=self.harvest_var).pack(side="left")
         
-        tk.Button(f, text="LOG TEST RESULTS", command=self.save_data, bg="#27ae60", fg="white", font=("Arial", 11, "bold")).pack(fill="x", pady=15)
+        tk.Checkbutton(f, text="Harvested Macroalgae", variable=self.harvest_var).pack(pady=5)
+        tk.Button(f, text="LOG TEST RESULTS (SILENT)", command=self.save_maint_silent, bg="#27ae60", fg="white", font=("Arial", 11, "bold")).pack(fill="x", pady=10)
+        self.maint_status = tk.Label(f, text="", font=("Arial", 9, "italic"), fg="#27ae60")
+        self.maint_status.pack()
 
-    def save_data(self):
+    def save_maint_silent(self):
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-        try:
-            with open(self.log_file, "a", newline="") as f:
-                w = csv.writer(f)
-                for p, (ent, u) in self.m_entries.items():
-                    if ent.get(): w.writerow([ts, p, ent.get(), u.get()])
-                if self.harvest_var.get(): w.writerow([ts, "Harvest", "1", "Event"])
-            messagebox.showinfo("Success", "Data Logged."); self.refresh_hist()
-        except: messagebox.showerror("Error", "Save Failed.")
+        logged_any = False
+        with open(self.log_file, "a", newline="") as f:
+            w = csv.writer(f)
+            for p, (ent, u) in self.m_entries.items():
+                if ent.get(): 
+                    w.writerow([ts, p, ent.get(), u.get()])
+                    logged_any = True
+            if self.harvest_var.get(): w.writerow([ts, "Harvest", "1", "Event"])
+        if logged_any: self.maint_status.config(text="✅ TEST DATA LOGGED SILENTLY")
 
     def build_trends(self):
         self.canvas_base = tk.Canvas(self.tabs["Trends"])
@@ -212,9 +212,8 @@ class AquariumCommanderPro:
         self.canvas_base.configure(yscrollcommand=scroll.set)
         self.canvas_base.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
-        
         self.figs_data = []
-        for p in list(self.ranges.keys()):
+        for p in self.ranges.keys():
             fig, ax = plt.subplots(figsize=(9, 2.5))
             c = FigureCanvasTkAgg(fig, master=self.scroll_frame)
             c.get_tk_widget().pack(fill="x", padx=10, pady=5)
@@ -225,7 +224,6 @@ class AquariumCommanderPro:
         with open(self.log_file, "r") as f:
             all_r = list(csv.reader(f))[1:]
             harvests = [r[0].split(" ")[0] for r in all_r if r[1] == "Harvest"]
-            
         for item in self.figs_data:
             p, ax, c = item["p"], item["ax"], item["canvas"]
             dates, vals = [], []
@@ -237,14 +235,14 @@ class AquariumCommanderPro:
             if vals:
                 ax.plot(dates, vals, marker='o', color='black', linewidth=1.5, zorder=10)
                 rng = self.ranges[p]
-                # Zone Visuals
-                ax.axhspan(rng["low"], rng["high"], color='#2ecc71', alpha=0.3, zorder=1) # Green
-                ax.axhspan(rng["crit_low"], rng["low"], color='#f1c40f', alpha=0.15, zorder=1) # Yellow
-                ax.axhspan(rng["high"], rng["crit_high"], color='#f1c40f', alpha=0.15, zorder=1) # Yellow
-                ax.axhline(rng["target"], color='darkgreen', linestyle='--', alpha=0.6, zorder=2)
-                for h in harvests: ax.axvline(h, color='orange', alpha=0.3, linestyle=':', label="Harvest")
-                ax.set_title(f"{p} (Stability Zone)", fontsize=10, fontweight='bold')
-                ax.tick_params(labelsize=8)
+                ax.axhspan(rng["low"], rng["high"], color='#2ecc71', alpha=0.4, zorder=1) # Green
+                ax.axhspan(rng["crit_low"], rng["low"], color='#f1c40f', alpha=0.25, zorder=1) # Yellow
+                ax.axhspan(rng["high"], rng["crit_high"], color='#f1c40f', alpha=0.25, zorder=1)
+                ax.axhspan(ax.get_ylim()[0], rng["crit_low"], color='#e74c3c', alpha=0.2, zorder=0) # Red
+                ax.axhspan(rng["crit_high"], ax.get_ylim()[1], color='#e74c3c', alpha=0.2, zorder=0)
+                ax.axhline(rng["target"], color='darkgreen', linestyle='--', alpha=0.7)
+                for h in harvests: ax.axvline(h, color='orange', alpha=0.4, linestyle=':')
+                ax.set_title(f"{p} Stability Chart", fontsize=10, fontweight='bold')
             c.draw()
 
     def build_history(self):
@@ -252,8 +250,8 @@ class AquariumCommanderPro:
         self.tree = ttk.Treeview(f, columns=("TS", "P", "V", "U"), show="headings")
         for c in ["TS", "P", "V", "U"]: self.tree.heading(c, text=c)
         self.tree.pack(fill="both", expand=True, padx=20, pady=10)
-        btn_f = ttk.Frame(f); btn_f.pack(fill="x", pady=10, padx=20)
-        tk.Button(btn_f, text="Delete Selected", command=self.delete_entry, bg="#e74c3c", fg="white").pack(side="left")
+        btn_f = ttk.Frame(f); btn_f.pack(fill="x", pady=5, padx=20)
+        tk.Button(btn_f, text="Delete Entry", command=self.delete_entry, bg="#e74c3c", fg="white").pack(side="left")
         tk.Button(btn_f, text="Export CSV", command=self.export_data, bg="#3498db", fg="white").pack(side="left", padx=10)
         self.refresh_hist()
 
