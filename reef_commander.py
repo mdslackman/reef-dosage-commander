@@ -8,7 +8,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.16.7")
+        self.root.title("Aquarium Commander Pro v0.16.8")
         self.root.geometry("1200x950")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -62,7 +62,7 @@ class AquariumCommanderPro:
         self.ppb_input = tk.StringVar(); self.ppm_output = tk.StringVar(value="--- ppm")
         self.timer_running = False; self.remaining_time = 0
 
-        # UI Tabs
+        # UI Setup
         self.notebook = ttk.Notebook(root)
         self.tabs = {name: ttk.Frame(self.notebook) for name in ["Action Plan", "Maintenance", "Trends", "Testing & History"]}
         for name, frame in self.tabs.items(): self.notebook.add(frame, text=f" {name} ")
@@ -139,7 +139,7 @@ class AquariumCommanderPro:
         
         self.check_frame = ttk.Frame(walk_f); self.check_frame.pack(fill="both", expand=True, pady=10)
 
-    # --- CORE LOGIC ---
+    # --- CORE METHODS ---
     def auto_load_steps(self, e=None):
         self.reset_timer()
         brand, param = self.t_brand_var.get(), self.t_param_var.get()
@@ -170,7 +170,7 @@ class AquariumCommanderPro:
 
     def reset_timer(self):
         self.timer_running = False
-        self.t_btn.config(text="START TIMER", bg="#27ae60", state="disabled")
+        self.t_btn.config(text="START TIMER", bg="#27ae60")
         self.timer_lbl.config(text="00:00", fg="black")
 
     def run_timer(self):
