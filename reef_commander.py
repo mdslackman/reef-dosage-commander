@@ -1,6 +1,6 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-import csv, os, sys, time
+from tkinter import ttk, messagebox
+import csv, os, sys
 from datetime import datetime
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -8,7 +8,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.16.6")
+        self.root.title("Aquarium Commander Pro v0.16.7")
         self.root.geometry("1200x950")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -71,17 +71,17 @@ class AquariumCommanderPro:
         self.build_dosage(); self.build_maint(); self.build_trends(); self.build_history()
         self.update_brands()
 
-    # --- ACTION PLAN (Tab 1) ---
+    # --- TAB 1: ACTION PLAN ---
     def build_dosage(self):
         f = ttk.Frame(self.tabs["Action Plan"], padding=20); f.pack(fill="both")
         cfg = ttk.LabelFrame(f, text=" System Configuration ", padding=10); cfg.pack(fill="x", pady=5)
-        ttk.Label(cfg, text="Volume:").pack(side="left")
-        ttk.Entry(cfg, textvariable=self.vol_var, width=8).pack(side="left", padx=5)
+        tk.Label(cfg, text="Volume:").pack(side="left")
+        tk.Entry(cfg, textvariable=self.vol_var, width=8).pack(side="left", padx=5)
         ttk.Radiobutton(cfg, text="Liters", variable=self.unit_mode, value="Liters").pack(side="left")
         ttk.Radiobutton(cfg, text="Gallons", variable=self.unit_mode, value="Gallons").pack(side="left")
 
         row1 = ttk.Frame(f); row1.pack(fill="x", pady=5)
-        ttk.Label(row1, text="Parameter:").pack(side="left")
+        tk.Label(row1, text="Parameter:").pack(side="left")
         p_cb = ttk.Combobox(row1, textvariable=self.p_var, values=list(self.ranges.keys()), state="readonly")
         p_cb.pack(side="left", padx=5); p_cb.bind("<<ComboboxSelected>>", self.update_brands)
         self.alk_unit_frame = ttk.Frame(row1)
@@ -89,47 +89,48 @@ class AquariumCommanderPro:
         ttk.Radiobutton(self.alk_unit_frame, text="PPM", variable=self.alk_u_var, value="ppm").pack(side="left")
 
         row2 = ttk.Frame(f); row2.pack(fill="x", pady=5)
-        ttk.Label(row2, text="Product:").pack(side="left")
+        tk.Label(row2, text="Product:").pack(side="left")
         self.b_cb = ttk.Combobox(row2, textvariable=self.b_var, state="readonly")
         self.b_cb.pack(side="left", padx=5); self.b_cb.bind("<<ComboboxSelected>>", self.toggle_custom)
         self.custom_f = ttk.Frame(row2)
-        ttk.Label(self.custom_f, text="Strength:").pack(side="left")
-        ttk.Entry(self.custom_f, textvariable=self.custom_strength, width=8).pack(side="left")
+        tk.Label(self.custom_f, text="Strength:").pack(side="left")
+        tk.Entry(self.custom_f, textvariable=self.custom_strength, width=8).pack(side="left")
 
         row3 = ttk.Frame(f); row3.pack(fill="x", pady=5)
-        ttk.Label(row3, text="Current:").pack(side="left")
-        ttk.Entry(row3, textvariable=self.curr_val_var, width=10).pack(side="left", padx=5)
-        ttk.Label(row3, text="Target:").pack(side="left")
-        ttk.Entry(row3, textvariable=self.targ_val_var, width=10).pack(side="left", padx=5)
-        ttk.Label(row3, text="pH (Log):").pack(side="left")
-        ttk.Entry(row3, textvariable=self.ph_var, width=8).pack(side="left", padx=5)
+        tk.Label(row3, text="Current:").pack(side="left")
+        tk.Entry(row3, textvariable=self.curr_val_var, width=10).pack(side="left", padx=5)
+        tk.Label(row3, text="Target:").pack(side="left")
+        tk.Entry(row3, textvariable=self.targ_val_var, width=10).pack(side="left", padx=5)
+        tk.Label(row3, text="pH (Log):").pack(side="left")
+        tk.Entry(row3, textvariable=self.ph_var, width=8).pack(side="left", padx=5)
 
         tk.Button(f, text="CALCULATE", command=self.perform_calc, bg="#2c3e50", fg="white", height=2).pack(fill="x", pady=15)
         self.res_lbl = tk.Label(f, text="---", font=("Arial", 12, "bold"), fg="#2980b9"); self.res_lbl.pack()
 
-    # --- TESTING & HISTORY (Tab 4) ---
+    # --- TAB 4: TESTING & HISTORY ---
     def build_history(self):
         f = self.tabs["Testing & History"]
         walk_f = ttk.LabelFrame(f, text=" Guided Assistant ", padding=10)
         walk_f.pack(side="left", fill="both", padx=10, pady=10); walk_f.pack_propagate(False); walk_f.configure(width=420)
         
-        # Safe Range Reference (New)
+        # Safe Range Reference (Uses tk.Label to avoid TclError)
         self.range_info = tk.Label(walk_f, text="Select a test to see safe ranges", font=("Arial", 9, "italic"), fg="#7f8c8d")
         self.range_info.pack(pady=(0, 10))
 
-        ttk.Label(walk_f, text="1. Select Test Type:").pack(anchor="w")
+        tk.Label(walk_f, text="1. Select Test Type:").pack(anchor="w")
         t_cb = ttk.Combobox(walk_f, textvariable=self.t_param_var, values=list(self.ranges.keys()), state="readonly")
         t_cb.pack(fill="x", pady=2); t_cb.bind("<<ComboboxSelected>>", self.filter_test_brands)
         
-        ttk.Label(walk_f, text="2. Select Kit Brand:").pack(anchor="w")
+        tk.Label(walk_f, text="2. Select Kit Brand:").pack(anchor="w")
         self.tb_cb = ttk.Combobox(walk_f, textvariable=self.t_brand_var, state="readonly")
         self.tb_cb.pack(fill="x", pady=2); self.tb_cb.bind("<<ComboboxSelected>>", self.auto_load_steps)
 
+        # Converter
         self.conv_f = ttk.LabelFrame(walk_f, text=" Hanna PPB -> PPM ", padding=5)
-        ttk.Entry(self.conv_f, textvariable=self.ppb_input, width=10).pack(side="left")
+        tk.Entry(self.conv_f, textvariable=self.ppb_input, width=10).pack(side="left")
         self.ppb_input.trace_add("write", self.convert_ppb)
-        ttk.Label(self.conv_f, text=" ppb = ").pack(side="left")
-        ttk.Label(self.conv_f, textvariable=self.ppm_output, font=("Arial", 10, "bold"), fg="#2980b9").pack(side="left")
+        tk.Label(self.conv_f, text=" ppb = ").pack(side="left")
+        tk.Label(self.conv_f, textvariable=self.ppm_output, font=("Arial", 10, "bold"), fg="#2980b9").pack(side="left")
 
         self.timer_lbl = tk.Label(walk_f, text="00:00", font=("Consolas", 28, "bold"))
         self.timer_lbl.pack(pady=10)
@@ -138,18 +139,17 @@ class AquariumCommanderPro:
         
         self.check_frame = ttk.Frame(walk_f); self.check_frame.pack(fill="both", expand=True, pady=10)
 
-    # --- CORE METHODS ---
+    # --- CORE LOGIC ---
     def auto_load_steps(self, e=None):
         self.reset_timer()
         brand, param = self.t_brand_var.get(), self.t_param_var.get()
         
-        # Converter visibility
         if brand == "Hanna" and param == "Phosphate": self.conv_f.pack(fill="x", pady=5)
         else: self.conv_f.pack_forget()
 
-        # Update Reference Chart
         r = self.ranges.get(param)
-        if r: self.range_info.config(text=f"SAFE RANGE: {r['low']} - {r['high']} {r['units']} (Target: {r['target']})", fg="#27ae60", font=("Arial", 9, "bold"))
+        if r: 
+            self.range_info.config(text=f"SAFE RANGE: {r['low']} - {r['high']} {r['units']} (Target: {r['target']})", fg="#27ae60", font=("Arial", 9, "bold"))
 
         for w in self.check_frame.winfo_children(): w.destroy()
         d = self.test_instructions.get(brand, {}).get(param)
@@ -170,7 +170,8 @@ class AquariumCommanderPro:
 
     def reset_timer(self):
         self.timer_running = False
-        self.t_btn.config(text="START TIMER", bg="#27ae60")
+        self.t_btn.config(text="START TIMER", bg="#27ae60", state="disabled")
+        self.timer_lbl.config(text="00:00", fg="black")
 
     def run_timer(self):
         if self.timer_running and self.remaining_time > 0:
@@ -186,8 +187,12 @@ class AquariumCommanderPro:
         p = self.t_param_var.get()
         valid = [b for b in ["Salifert", "Hanna"] if p in self.test_instructions[b]]
         self.tb_cb['values'] = valid
-        if valid: self.tb_cb.current(0); self.auto_load_steps()
-        else: self.tb_cb.set(""); self.auto_load_steps()
+        if valid: 
+            self.tb_cb.current(0)
+            self.auto_load_steps()
+        else: 
+            self.tb_cb.set("")
+            self.auto_load_steps()
 
     def update_brands(self, e=None):
         p = self.p_var.get()
