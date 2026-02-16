@@ -8,7 +8,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.16.8")
+        self.root.title("Aquarium Commander Pro v0.16.9")
         self.root.geometry("1200x950")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -27,9 +27,9 @@ class AquariumCommanderPro:
 
         self.test_instructions = {
             "Salifert": {
-                "Alkalinity": {"steps": ["4ml water", "2 drops KH-Ind (swirl)", "Add reagent until Pink"], "time": 0},
-                "Calcium": {"steps": ["2ml water", "1 scoop Ca-1 powder", "Add 0.6ml Ca-2 then dropwise"], "time": 0},
-                "Magnesium": {"steps": ["2ml water", "6 drops Mg-1", "1 scoop Mg-2", "Dropwise Mg-3 until Blue"], "time": 0},
+                "Alkalinity": {"steps": ["4ml water", "2 drops KH-Ind", "Add reagent until Pink"], "time": 0},
+                "Calcium": {"steps": ["2ml water", "1 scoop Ca-1", "Add 0.6ml Ca-2 then dropwise"], "time": 0},
+                "Magnesium": {"steps": ["2ml water", "6 drops Mg-1", "1 scoop Mg-2", "Dropwise Mg-3"], "time": 0},
                 "Nitrate": {"steps": ["1ml water", "4ml NO3-1", "1 scoop NO3-2", "Swirl 30s", "Wait 3 mins"], "time": 180},
                 "Phosphate": {"steps": ["10ml water", "4 drops PO4-1", "1 scoop PO4-2", "Wait 5 mins"], "time": 300}
             },
@@ -54,11 +54,9 @@ class AquariumCommanderPro:
         self.vol_var = tk.StringVar(value=self.load_config())
         self.p_var = tk.StringVar(value="Alkalinity")
         self.alk_u_var = tk.StringVar(value="dKH")
-        self.b_var = tk.StringVar()
-        self.custom_strength = tk.StringVar(value="1.0")
+        self.b_var = tk.StringVar(); self.custom_strength = tk.StringVar(value="1.0")
         self.curr_val_var = tk.StringVar(); self.targ_val_var = tk.StringVar()
-        self.ph_var = tk.StringVar()
-        self.t_brand_var = tk.StringVar(); self.t_param_var = tk.StringVar()
+        self.ph_var = tk.StringVar(); self.t_brand_var = tk.StringVar(); self.t_param_var = tk.StringVar()
         self.ppb_input = tk.StringVar(); self.ppm_output = tk.StringVar(value="--- ppm")
         self.timer_running = False; self.remaining_time = 0
 
@@ -71,7 +69,7 @@ class AquariumCommanderPro:
         self.build_dosage(); self.build_maint(); self.build_trends(); self.build_history()
         self.update_brands()
 
-    # --- TAB 1: ACTION PLAN ---
+    # --- ACTION PLAN ---
     def build_dosage(self):
         f = ttk.Frame(self.tabs["Action Plan"], padding=20); f.pack(fill="both")
         cfg = ttk.LabelFrame(f, text=" System Configuration ", padding=10); cfg.pack(fill="x", pady=5)
@@ -107,13 +105,13 @@ class AquariumCommanderPro:
         tk.Button(f, text="CALCULATE", command=self.perform_calc, bg="#2c3e50", fg="white", height=2).pack(fill="x", pady=15)
         self.res_lbl = tk.Label(f, text="---", font=("Arial", 12, "bold"), fg="#2980b9"); self.res_lbl.pack()
 
-    # --- TAB 4: TESTING & HISTORY ---
+    # --- TESTING & HISTORY ---
     def build_history(self):
         f = self.tabs["Testing & History"]
         walk_f = ttk.LabelFrame(f, text=" Guided Assistant ", padding=10)
         walk_f.pack(side="left", fill="both", padx=10, pady=10); walk_f.pack_propagate(False); walk_f.configure(width=420)
         
-        # Safe Range Reference (Uses tk.Label to avoid TclError)
+        # Fixed Safe Range Label
         self.range_info = tk.Label(walk_f, text="Select a test to see safe ranges", font=("Arial", 9, "italic"), fg="#7f8c8d")
         self.range_info.pack(pady=(0, 10))
 
@@ -125,12 +123,13 @@ class AquariumCommanderPro:
         self.tb_cb = ttk.Combobox(walk_f, textvariable=self.t_brand_var, state="readonly")
         self.tb_cb.pack(fill="x", pady=2); self.tb_cb.bind("<<ComboboxSelected>>", self.auto_load_steps)
 
-        # Converter
+        # Fixed Converter
         self.conv_f = ttk.LabelFrame(walk_f, text=" Hanna PPB -> PPM ", padding=5)
         tk.Entry(self.conv_f, textvariable=self.ppb_input, width=10).pack(side="left")
         self.ppb_input.trace_add("write", self.convert_ppb)
         tk.Label(self.conv_f, text=" ppb = ").pack(side="left")
-        tk.Label(self.conv_f, textvariable=self.ppm_output, font=("Arial", 10, "bold"), fg="#2980b9").pack(side="left")
+        self.ppm_out_lbl = tk.Label(self.conv_f, textvariable=self.ppm_output, font=("Arial", 10, "bold"), fg="#2980b9")
+        self.ppm_out_lbl.pack(side="left")
 
         self.timer_lbl = tk.Label(walk_f, text="00:00", font=("Consolas", 28, "bold"))
         self.timer_lbl.pack(pady=10)
