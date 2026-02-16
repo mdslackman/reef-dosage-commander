@@ -9,7 +9,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.18.9")
+        self.root.title("Aquarium Commander Pro v0.19.0")
         self.root.geometry("1450x950")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -76,7 +76,7 @@ class AquariumCommanderPro:
         self.curr_val_var.trace_add("write", lambda *a: self.smart_detect(self.curr_val_var))
         self.alk_u_var.trace_add("write", self.sync_targets)
         self.p_var.trace_add("write", self.update_product_list)
-        self.t_param_var.trace_add("write", self.update_kits) # CRITICAL FIX: Re-linked kit update
+        self.t_param_var.trace_add("write", self.update_kits) 
 
     def build_dosage(self):
         f = ttk.Frame(self.tabs["Action Plan"], padding=20); f.pack(fill="both")
@@ -118,32 +118,33 @@ class AquariumCommanderPro:
 
     def calc_dose(self):
         try:
-            # 1. Volume Factor
+            # 1. STANDARDIZE VOLUME TO LITERS
             v_val = float(self.vol_var.get())
             vol_l = v_val if self.unit_mode.get() == "Liters" else v_val * 3.78541
             
-            # 2. Delta Factor (Always calculate in dKH for brand strength compatibility)
+            # 2. STANDARDIZE GAP TO dKH
             curr = float(self.curr_val_var.get())
             targ = float(self.targ_val_var.get())
-            if self.alk_u_var.get() == "ppm" and self.p_var.get() == "Alkalinity":
+            if self.p_var.get() == "Alkalinity" and self.alk_u_var.get() == "ppm":
                 gap_dkh = (targ - curr) / 17.86
             else:
                 gap_dkh = targ - curr
 
             if gap_dkh <= 0:
-                self.res_lbl.config(text="Levels Optimal", fg="green")
+                self.res_lbl.config(text="Goal Reached", fg="green")
                 return
 
-            # 3. Strength Factor
+            # 3. GET BRAND STRENGTH (Strength = dKH increase per 1mL in 100L)
             p = self.p_var.get()
             prod = self.b_var.get()
             strength = float(self.custom_strength.get()) if prod == "Custom" else self.brand_data[p][prod]
             
-            # MATH: (Gap * (Volume / 100)) / Strength
+            # 4. MATH: (Gap * (Total Volume / 100L)) / Strength
             dose = (gap_dkh * (vol_l / 100.0)) / strength
+            
             self.res_lbl.config(text=f"Total Dose: {dose:.2f} mL", fg="#c0392b")
-        except:
-            self.res_lbl.config(text="Check Numbers", fg="red")
+        except Exception as e:
+            self.res_lbl.config(text="Check Inputs", fg="red")
 
     def build_history(self):
         f = self.tabs["Testing & History"]
@@ -152,7 +153,6 @@ class AquariumCommanderPro:
         ttk.Combobox(left, textvariable=self.t_param_var, values=list(self.ranges.keys())).pack(fill="x", pady=5)
         tk.Label(left, text="Select Test Kit:").pack(anchor="w")
         self.kit_cb = ttk.Combobox(left, textvariable=self.t_brand_var, state="readonly"); self.kit_cb.pack(fill="x", pady=5)
-        self.t_brand_var.trace_add("write", self.update_steps) # Fix for instructions
         
         self.step_f = ttk.Frame(left); self.step_f.pack(fill="both", expand=True)
         res_f = ttk.Frame(left); res_f.pack(fill="x")
@@ -193,7 +193,6 @@ class AquariumCommanderPro:
             btn.config(text="DONE", bg="lightgreen")
             messagebox.showinfo("Timer", "Time Up!")
 
-    # Standard Helpers
     def smart_detect(self, var):
         try:
             v = float(var.get())
