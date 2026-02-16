@@ -6,16 +6,10 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-# Helper for EXE pathing
-def get_resource_path(relative_path):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative_path)
-    return os.path.join(os.path.abspath("."), relative_path)
-
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.19.1")
+        self.root.title("Aquarium Commander Pro v0.19.2")
         self.root.geometry("1450x950")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -90,17 +84,24 @@ class AquariumCommanderPro:
         self.p_var.trace_add("write", self.update_product_list)
         self.t_param_var.trace_add("write", self.update_kits)
 
+    def load_config(self, path, default):
+        if not os.path.exists(path):
+            return default
+        try:
+            with open(path, "r") as f:
+                return f.read().strip()
+        except:
+            return default
+
     def build_dosage(self):
         f = ttk.Frame(self.tabs["Action Plan"], padding=20); f.pack(fill="both")
         
-        # Volume Selection
         r0 = ttk.LabelFrame(f, text=" 1. System Volume ", padding=10)
         r0.pack(fill="x", pady=5)
         tk.Entry(r0, textvariable=self.vol_var, width=10).pack(side="left", padx=5)
         ttk.Radiobutton(r0, text="Liters", variable=self.unit_mode, value="Liters").pack(side="left", padx=5)
         ttk.Radiobutton(r0, text="Gallons", variable=self.unit_mode, value="Gallons").pack(side="left", padx=5)
 
-        # Parameter Selection
         r1 = ttk.LabelFrame(f, text=" 2. Parameter & Product ", padding=10)
         r1.pack(fill="x", pady=5)
         tk.Label(r1, text="Chemical:").pack(side="left")
@@ -120,7 +121,6 @@ class AquariumCommanderPro:
         tk.Entry(self.custom_pane, textvariable=self.custom_strength, width=8).pack(side="left")
         self.update_product_list()
 
-        # Values
         r3 = ttk.LabelFrame(f, text=" 3. Measurements ", padding=10)
         r3.pack(fill="x", pady=10)
         tk.Label(r3, text="Current:").pack(side="left")
@@ -136,37 +136,25 @@ class AquariumCommanderPro:
 
     def calc_dose(self):
         try:
-            # 1. Volume Check
             v_raw = float(self.vol_var.get())
             if v_raw <= 0:
                 messagebox.showwarning("Setup Required", "Please enter a valid System Volume.")
                 return
-            
-            # 2. Convert to Liters
             vol_l = v_raw * 3.78541 if self.unit_mode.get() == "Gallons" else v_raw
-            
-            # 3. Handle Gap in dKH
             curr = float(self.curr_val_var.get())
             targ = float(self.targ_val_var.get())
-            
             if self.p_var.get() == "Alkalinity" and self.alk_u_var.get() == "ppm":
                 gap_dkh = (targ - curr) / 17.8647
             else:
                 gap_dkh = targ - curr
-
             if gap_dkh <= 0:
                 self.res_lbl.config(text="Goal Reached - No Dose Needed", fg="green")
                 return
-
-            # 4. Product Strength
             p = self.p_var.get()
             prod = self.b_var.get()
             strength = float(self.custom_strength.get()) if prod == "Custom" else self.brand_data[p][prod]
-            
-            # 5. Final Calculation
             dose = (gap_dkh * (vol_l / 100.0)) / strength
             self.res_lbl.config(text=f"Total Dose: {dose:.2f} mL", fg="#c0392b")
-            
         except ValueError:
             self.res_lbl.config(text="Error: Non-numeric input", fg="red")
 
@@ -177,12 +165,10 @@ class AquariumCommanderPro:
         ttk.Combobox(left, textvariable=self.t_param_var, values=list(self.ranges.keys())).pack(fill="x", pady=5)
         tk.Label(left, text="2. Select Test Kit:").pack(anchor="w")
         self.kit_cb = ttk.Combobox(left, textvariable=self.t_brand_var, state="readonly"); self.kit_cb.pack(fill="x", pady=5)
-        
         self.step_f = ttk.Frame(left); self.step_f.pack(fill="both", expand=True)
         res_f = ttk.Frame(left); res_f.pack(fill="x")
         tk.Entry(res_f, textvariable=self.readout_var).pack(side="left", fill="x", expand=True)
         tk.Button(res_f, text="LOG", command=self.save_hist).pack(side="right")
-
         right = ttk.Frame(f, padding=10); right.pack(side="right", fill="both", expand=True)
         self.tree = ttk.Treeview(right, columns=("T", "P", "V"), show="headings")
         for c, h in [("T", "Time"), ("P", "Param"), ("V", "Value")]: self.tree.heading(c, text=h)
@@ -225,7 +211,6 @@ class AquariumCommanderPro:
             FigureCanvasTkAgg(fig, master=self.t_canv).get_tk_widget().pack(fill="both", expand=True)
         except: pass
 
-    # --- HELPERS ---
     def update_product_list(self, *a):
         p = self.p_var.get()
         brands = list(self.brand_data.get(p, {}).keys())
@@ -281,8 +266,6 @@ class AquariumCommanderPro:
     def refresh_all(self): self.refresh_history_table(); self.refresh_graphs()
     def init_csv(self):
         if not os.path.exists(self.log_file): pd.DataFrame(columns=["Timestamp", "Parameter", "Value", "Unit"]).to_csv(self.log_file, index=False)
-    def load_config(self, path, default):
-        return open(path, "r").read().strip() if os.path.exists(path) else default
     def hard_exit(self):
         with open(self.config_file, "w") as f: f.write(self.vol_var.get())
         with open(self.unit_file, "w") as f: f.write(self.unit_mode.get())
