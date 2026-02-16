@@ -16,7 +16,7 @@ class AquariumCommanderPro:
         self.config_file = "app_config.txt"
         self.init_csv()
 
-        # --- DATABASE: Products & Test Instructions ---
+        # --- DATABASE ---
         self.brand_data = {
             "ESV B-Ionic Alk (Part 1)": 1.4, "Fritz RPM Liquid Alk": 1.4,
             "ESV B-Ionic Cal (Part 2)": 20.0, "Fritz RPM Liquid Cal": 20.0,
@@ -210,11 +210,13 @@ class AquariumCommanderPro:
     def build_history(self):
         f = self.tabs["Testing & History"]
         
+        # --- LEFT SIDE: WALKTHROUGH ---
         walk_f = ttk.LabelFrame(f, text=" Guided Test Assistant ", padding=10)
         walk_f.pack(side="left", fill="both", padx=10, pady=10)
         walk_f.pack_propagate(False) 
         walk_f.configure(width=420)   
         
+        # Hanna PPB Converter
         conv = ttk.LabelFrame(walk_f, text=" Hanna PPB -> PPM Converter ", padding=5)
         conv.pack(fill="x", pady=5)
         ttk.Entry(conv, textvariable=self.ppb_input, width=10).pack(side="left")
@@ -222,6 +224,7 @@ class AquariumCommanderPro:
         ttk.Label(conv, text=" ppb = ").pack(side="left")
         ttk.Label(conv, textvariable=self.ppm_output, font=("Arial", 10, "bold"), foreground="#2980b9").pack(side="left")
 
+        # Timer Display
         self.timer_lbl = tk.Label(walk_f, text="00:00", font=("Consolas", 24, "bold"), fg="#2c3e50")
         self.timer_lbl.pack(pady=10)
         self.timer_btn = tk.Button(walk_f, text="START REACTION TIMER", command=self.start_timer, state="disabled", bg="#27ae60", fg="white")
@@ -235,6 +238,7 @@ class AquariumCommanderPro:
         tk.Button(walk_f, text="LOAD INSTRUCTIONS", command=self.update_walkthrough, bg="#34495e", fg="white").pack(fill="x", pady=10)
         self.check_frame = ttk.Frame(walk_f); self.check_frame.pack(fill="both", expand=True)
 
+        # --- RIGHT SIDE: HISTORY ---
         hist_container = ttk.Frame(f)
         hist_container.pack(side="right", fill="both", expand=True, padx=10, pady=10)
         self.tree = ttk.Treeview(hist_container, columns=("TS", "P", "V", "U"), show="headings")
