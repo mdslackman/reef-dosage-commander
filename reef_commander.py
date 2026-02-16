@@ -6,10 +6,16 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+# Helper for EXE pathing
+def get_resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.19.0")
+        self.root.title("Aquarium Commander Pro v0.19.1")
         self.root.geometry("1450x950")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -18,7 +24,7 @@ class AquariumCommanderPro:
         self.unit_file = "unit_config.txt"
         self.init_csv()
 
-        # Database
+        # --- DATABASE ---
         self.brand_data = {
             "Alkalinity": {"Fritz RPM Liquid": 1.4, "ESV B-Ionic Part 1": 1.4, "Custom": 1.0},
             "Calcium": {"ESV B-Ionic Part 2": 20.0, "Fritz RPM Liquid": 20.0, "Custom": 1.0},
@@ -50,45 +56,54 @@ class AquariumCommanderPro:
             "Phosphate": {"target": 0.03, "low": 0.01, "high": 0.1}
         }
 
-        # Persist State
-        self.vol_var = tk.StringVar(value=self.load_config(self.config_file, "220"))
+        # --- PERSISTENT STATE ---
+        self.vol_var = tk.StringVar(value=self.load_config(self.config_file, "0"))
         self.unit_mode = tk.StringVar(value=self.load_config(self.unit_file, "Gallons"))
 
-        # Variables
+        # --- DYNAMIC VARIABLES ---
         self.p_var = tk.StringVar(value="Alkalinity")
         self.alk_u_var = tk.StringVar(value="dKH")
         self.b_var = tk.StringVar()
         self.custom_strength = tk.StringVar(value="1.0")
-        self.curr_val_var = tk.StringVar(); self.targ_val_var = tk.StringVar(value="8.5")
-        self.ph_var = tk.StringVar(); self.readout_var = tk.StringVar()
-        self.t_brand_var = tk.StringVar(); self.t_param_var = tk.StringVar()
+        self.curr_val_var = tk.StringVar()
+        self.targ_val_var = tk.StringVar(value="8.5")
+        self.ph_var = tk.StringVar()
+        self.readout_var = tk.StringVar()
+        self.t_brand_var = tk.StringVar()
+        self.t_param_var = tk.StringVar()
         self.m_vars = {p: tk.StringVar() for p in self.ranges.keys()}
 
-        # Build UI
+        # --- UI SETUP ---
         self.notebook = ttk.Notebook(root)
         self.tabs = {name: ttk.Frame(self.notebook) for name in ["Action Plan", "Maintenance", "Trends", "Testing & History"]}
         for name, frame in self.tabs.items(): self.notebook.add(frame, text=f" {name} ")
         self.notebook.pack(expand=True, fill="both")
         
-        self.build_dosage(); self.build_maint(); self.build_history(); self.build_trends()
+        self.build_dosage()
+        self.build_maint()
+        self.build_history()
+        self.build_trends()
         
-        # Observers
+        # --- TRACES ---
         self.curr_val_var.trace_add("write", lambda *a: self.smart_detect(self.curr_val_var))
         self.alk_u_var.trace_add("write", self.sync_targets)
         self.p_var.trace_add("write", self.update_product_list)
-        self.t_param_var.trace_add("write", self.update_kits) 
+        self.t_param_var.trace_add("write", self.update_kits)
 
     def build_dosage(self):
         f = ttk.Frame(self.tabs["Action Plan"], padding=20); f.pack(fill="both")
         
-        r0 = ttk.Frame(f); r0.pack(fill="x", pady=5)
-        tk.Label(r0, text="System Volume:").pack(side="left")
+        # Volume Selection
+        r0 = ttk.LabelFrame(f, text=" 1. System Volume ", padding=10)
+        r0.pack(fill="x", pady=5)
         tk.Entry(r0, textvariable=self.vol_var, width=10).pack(side="left", padx=5)
-        ttk.Radiobutton(r0, text="Liters", variable=self.unit_mode, value="Liters").pack(side="left")
-        ttk.Radiobutton(r0, text="Gallons", variable=self.unit_mode, value="Gallons").pack(side="left")
+        ttk.Radiobutton(r0, text="Liters", variable=self.unit_mode, value="Liters").pack(side="left", padx=5)
+        ttk.Radiobutton(r0, text="Gallons", variable=self.unit_mode, value="Gallons").pack(side="left", padx=5)
 
-        r1 = ttk.Frame(f); r1.pack(fill="x", pady=5)
-        tk.Label(r1, text="Parameter:").pack(side="left")
+        # Parameter Selection
+        r1 = ttk.LabelFrame(f, text=" 2. Parameter & Product ", padding=10)
+        r1.pack(fill="x", pady=5)
+        tk.Label(r1, text="Chemical:").pack(side="left")
         ttk.Combobox(r1, textvariable=self.p_var, values=list(self.ranges.keys()), state="readonly").pack(side="left", padx=5)
         
         self.alk_u_pane = ttk.Frame(r1)
@@ -96,48 +111,41 @@ class AquariumCommanderPro:
         ttk.Radiobutton(self.alk_u_pane, text="PPM", variable=self.alk_u_var, value="ppm").pack(side="left")
         self.alk_u_pane.pack(side="left", padx=10)
 
-        r2 = ttk.Frame(f); r2.pack(fill="x", pady=5)
-        tk.Label(r2, text="Product:").pack(side="left")
-        self.b_cb = ttk.Combobox(r2, textvariable=self.b_var, state="readonly")
+        tk.Label(r1, text="Product:").pack(side="left", padx=(10,0))
+        self.b_cb = ttk.Combobox(r1, textvariable=self.b_var, state="readonly")
         self.b_cb.pack(side="left", padx=5)
-        self.custom_pane = ttk.Frame(r2)
+        
+        self.custom_pane = ttk.Frame(r1)
         tk.Label(self.custom_pane, text="Strength:").pack(side="left")
         tk.Entry(self.custom_pane, textvariable=self.custom_strength, width=8).pack(side="left")
         self.update_product_list()
 
-        r3 = ttk.Frame(f); r3.pack(fill="x", pady=10)
+        # Values
+        r3 = ttk.LabelFrame(f, text=" 3. Measurements ", padding=10)
+        r3.pack(fill="x", pady=10)
         tk.Label(r3, text="Current:").pack(side="left")
         tk.Entry(r3, textvariable=self.curr_val_var, width=10).pack(side="left", padx=5)
         tk.Label(r3, text="Target:").pack(side="left")
         tk.Entry(r3, textvariable=self.targ_val_var, width=10).pack(side="left", padx=5)
-        tk.Label(r3, text="pH (Opt):").pack(side="left", padx=10)
+        tk.Label(r3, text="pH (Optional):").pack(side="left", padx=10)
         tk.Entry(r3, textvariable=self.ph_var, width=8).pack(side="left")
 
-        tk.Button(f, text="CALCULATE", command=self.calc_dose, bg="#2c3e50", fg="white", height=2).pack(fill="x", pady=10)
-        self.res_lbl = tk.Label(f, text="---", font=("Arial", 14, "bold")); self.res_lbl.pack()
-
-   def load_config(self, path, default):
-        # Force a "0" or empty state if no config exists to ensure the user sets it up
-        if not os.path.exists(path):
-            return "0" 
-        return open(path, "r").read().strip()
+        tk.Button(f, text="CALCULATE DOSAGE", command=self.calc_dose, bg="#2c3e50", fg="white", height=2, font=('Arial', 10, 'bold')).pack(fill="x", pady=10)
+        self.res_lbl = tk.Label(f, text="Enter volume and parameters", font=("Arial", 16, "bold"), fg="#2980b9")
+        self.res_lbl.pack(pady=10)
 
     def calc_dose(self):
         try:
-            # 1. VALIDATE SYSTEM VOLUME
+            # 1. Volume Check
             v_raw = float(self.vol_var.get())
             if v_raw <= 0:
-                messagebox.showwarning("Setup Required", "Please enter your System Volume first.")
+                messagebox.showwarning("Setup Required", "Please enter a valid System Volume.")
                 return
             
-            # 2. CONVERT TO BASE UNIT (LITERS)
-            # 220 Gallons -> 832.79 Liters
-            is_gallons = self.unit_mode.get() == "Gallons"
-            vol_l = v_raw * 3.78541 if is_gallons else v_raw
+            # 2. Convert to Liters
+            vol_l = v_raw * 3.78541 if self.unit_mode.get() == "Gallons" else v_raw
             
-            # 3. CALCULATE THE GAP IN dKH
-            # Brand data is strictly calibrated to dKH. 
-            # 1 dKH = 17.86 ppm
+            # 3. Handle Gap in dKH
             curr = float(self.curr_val_var.get())
             targ = float(self.targ_val_var.get())
             
@@ -147,34 +155,27 @@ class AquariumCommanderPro:
                 gap_dkh = targ - curr
 
             if gap_dkh <= 0:
-                self.res_lbl.config(text="Goal Reached", fg="green")
+                self.res_lbl.config(text="Goal Reached - No Dose Needed", fg="green")
                 return
 
-            # 4. GET BRAND STRENGTH (mL to raise 100L by 1 dKH)
+            # 4. Product Strength
             p = self.p_var.get()
             prod = self.b_var.get()
-            
-            # Fritz RPM logic: 1.4 dKH increase per 1mL in 100L
             strength = float(self.custom_strength.get()) if prod == "Custom" else self.brand_data[p][prod]
             
-            # 5. FINAL CALCULATION
-            # (Gap * (Total Liters / 100L)) / Strength
-            # (4.53 * 8.327) / 1.4 * 100 = 2698.33
+            # 5. Final Calculation
             dose = (gap_dkh * (vol_l / 100.0)) / strength
-            
             self.res_lbl.config(text=f"Total Dose: {dose:.2f} mL", fg="#c0392b")
             
         except ValueError:
-            self.res_lbl.config(text="Error: Enter numbers only", fg="red")
-        except Exception as e:
-            self.res_lbl.config(text=f"Error: {str(e)}", fg="red")
-            
+            self.res_lbl.config(text="Error: Non-numeric input", fg="red")
+
     def build_history(self):
         f = self.tabs["Testing & History"]
         left = ttk.Frame(f, width=400, padding=10); left.pack(side="left", fill="y")
-        tk.Label(left, text="Select Chemical:").pack(anchor="w")
+        tk.Label(left, text="1. Select Chemical:").pack(anchor="w")
         ttk.Combobox(left, textvariable=self.t_param_var, values=list(self.ranges.keys())).pack(fill="x", pady=5)
-        tk.Label(left, text="Select Test Kit:").pack(anchor="w")
+        tk.Label(left, text="2. Select Test Kit:").pack(anchor="w")
         self.kit_cb = ttk.Combobox(left, textvariable=self.t_brand_var, state="readonly"); self.kit_cb.pack(fill="x", pady=5)
         
         self.step_f = ttk.Frame(left); self.step_f.pack(fill="both", expand=True)
@@ -196,71 +197,13 @@ class AquariumCommanderPro:
         if kits: self.kit_cb.current(0)
         else: self.kit_cb.set("")
 
-    def update_steps(self, *a):
-        for w in self.step_f.winfo_children(): w.destroy()
-        brand, p = self.t_brand_var.get(), self.t_param_var.get()
-        if brand in self.test_instructions and p in self.test_instructions[brand]:
-            for txt, sec in self.test_instructions[brand][p]:
-                r = ttk.Frame(self.step_f); r.pack(fill="x", pady=1)
-                tk.Checkbutton(r, text=txt).pack(side="left")
-                if sec > 0:
-                    btn = tk.Button(r, text=f"⏲ {sec}s")
-                    btn.config(command=lambda b=btn, s=sec: self.run_timer(b, s))
-                    btn.pack(side="right")
-
-    def run_timer(self, btn, seconds):
-        if seconds > 0:
-            btn.config(text=f"{seconds}s", bg="yellow")
-            self.root.after(1000, lambda: self.run_timer(btn, seconds-1))
-        else:
-            btn.config(text="DONE", bg="lightgreen")
-            messagebox.showinfo("Timer", "Time Up!")
-
-    def smart_detect(self, var):
-        try:
-            v = float(var.get())
-            if v > 30 and self.alk_u_var.get() == "dKH": self.alk_u_var.set("ppm")
-            elif 0 < v < 20 and self.alk_u_var.get() == "ppm": self.alk_u_var.set("dKH")
-        except: pass
-
-    def sync_targets(self, *args):
-        if self.p_var.get() == "Alkalinity":
-            self.targ_val_var.set("152" if self.alk_u_var.get() == "ppm" else "8.5")
-
-    def update_product_list(self, *a):
-        p = self.p_var.get()
-        brands = list(self.brand_data.get(p, {}).keys())
-        self.b_cb['values'] = brands
-        if brands: self.b_cb.current(0)
-
-    def show_context_menu(self, e):
-        i = self.tree.identify_row(e.y)
-        if i:
-            self.tree.selection_set(i)
-            m = tk.Menu(self.root, tearoff=0)
-            m.add_command(label="Delete", command=self.delete_entry)
-            m.post(e.x_root, e.y_root)
-
-    def delete_entry(self):
-        s = self.tree.item(self.tree.selection())['values']
-        df = pd.read_csv(self.log_file)
-        df = df[~((df['Timestamp'] == s[0]) & (df['Parameter'] == s[1]))]
-        df.to_csv(self.log_file, index=False); self.refresh_all()
-
     def build_maint(self):
         f = ttk.Frame(self.tabs["Maintenance"], padding=20); f.pack(fill="both")
         for p in self.ranges.keys():
             r = ttk.Frame(f); r.pack(fill="x", pady=2)
             tk.Label(r, text=p, width=15).pack(side="left")
             tk.Entry(r, textvariable=self.m_vars[p]).pack(side="left", fill="x", expand=True)
-        tk.Button(f, text="LOG ALL", command=self.save_maint, bg="green", fg="white").pack(fill="x", pady=10)
-
-    def save_maint(self):
-        with open(self.log_file, "a", newline="") as f:
-            w = csv.writer(f); ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-            for p, v in self.m_vars.items():
-                if v.get(): w.writerow([ts, p, v.get(), ""])
-        self.refresh_all()
+        tk.Button(f, text="LOG ALL TO HISTORY", command=self.save_maint, bg="green", fg="white").pack(fill="x", pady=10)
 
     def build_trends(self):
         f = self.tabs["Trends"]
@@ -277,19 +220,57 @@ class AquariumCommanderPro:
             for i, (p, r) in enumerate(self.ranges.items()):
                 subset = df[df['Parameter'] == p]
                 if subset.empty: continue
-                is_ppm = subset['Value'].max() > 30 if p == "Alkalinity" else False
-                low, high = (r['ppm_low'], r['ppm_high']) if is_ppm else (r['low'], r['high'])
                 axes[i].plot(subset['Timestamp'], subset['Value'], marker='o', color='black')
-                axes[i].axhspan(low, high, color='green', alpha=0.2)
                 axes[i].set_title(p)
             FigureCanvasTkAgg(fig, master=self.t_canv).get_tk_widget().pack(fill="both", expand=True)
         except: pass
+
+    # --- HELPERS ---
+    def update_product_list(self, *a):
+        p = self.p_var.get()
+        brands = list(self.brand_data.get(p, {}).keys())
+        self.b_cb['values'] = brands
+        if brands: self.b_cb.current(0)
+        if self.b_var.get() == "Custom": self.custom_pane.pack(side="left")
+        else: self.custom_pane.pack_forget()
+
+    def smart_detect(self, var):
+        try:
+            v = float(var.get())
+            if v > 30 and self.alk_u_var.get() == "dKH": self.alk_u_var.set("ppm")
+            elif 0 < v < 20 and self.alk_u_var.get() == "ppm": self.alk_u_var.set("dKH")
+        except: pass
+
+    def sync_targets(self, *args):
+        if self.p_var.get() == "Alkalinity":
+            self.targ_val_var.set("152" if self.alk_u_var.get() == "ppm" else "8.5")
+
+    def show_context_menu(self, e):
+        i = self.tree.identify_row(e.y)
+        if i:
+            self.tree.selection_set(i)
+            m = tk.Menu(self.root, tearoff=0)
+            m.add_command(label="Delete", command=self.delete_entry)
+            m.post(e.x_root, e.y_root)
+
+    def delete_entry(self):
+        s = self.tree.item(self.tree.selection())['values']
+        df = pd.read_csv(self.log_file)
+        df = df[~((df['Timestamp'] == s[0]) & (df['Parameter'] == s[1]))]
+        df.to_csv(self.log_file, index=False); self.refresh_all()
 
     def save_hist(self):
         if self.readout_var.get():
             with open(self.log_file, "a", newline="") as f:
                 csv.writer(f).writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), self.t_param_var.get(), self.readout_var.get(), ""])
             self.refresh_all()
+
+    def save_maint(self):
+        with open(self.log_file, "a", newline="") as f:
+            w = csv.writer(f); ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+            for p, v in self.m_vars.items():
+                if v.get(): w.writerow([ts, p, v.get(), ""])
+        self.refresh_all(); messagebox.showinfo("Success", "Logs updated.")
 
     def refresh_history_table(self):
         for i in self.tree.get_children(): self.tree.delete(i)
