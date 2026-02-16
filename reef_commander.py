@@ -116,17 +116,33 @@ class AquariumCommanderPro:
         tk.Button(f, text="CALCULATE", command=self.calc_dose, bg="#2c3e50", fg="white", height=2).pack(fill="x", pady=10)
         self.res_lbl = tk.Label(f, text="---", font=("Arial", 14, "bold")); self.res_lbl.pack()
 
+   def load_config(self, path, default):
+        # Force a "0" or empty state if no config exists to ensure the user sets it up
+        if not os.path.exists(path):
+            return "0" 
+        return open(path, "r").read().strip()
+
     def calc_dose(self):
         try:
-            # 1. STANDARDIZE VOLUME TO LITERS
-            v_val = float(self.vol_var.get())
-            vol_l = v_val if self.unit_mode.get() == "Liters" else v_val * 3.78541
+            # 1. VALIDATE SYSTEM VOLUME
+            v_raw = float(self.vol_var.get())
+            if v_raw <= 0:
+                messagebox.showwarning("Setup Required", "Please enter your System Volume first.")
+                return
             
-            # 2. STANDARDIZE GAP TO dKH
+            # 2. CONVERT TO BASE UNIT (LITERS)
+            # 220 Gallons -> 832.79 Liters
+            is_gallons = self.unit_mode.get() == "Gallons"
+            vol_l = v_raw * 3.78541 if is_gallons else v_raw
+            
+            # 3. CALCULATE THE GAP IN dKH
+            # Brand data is strictly calibrated to dKH. 
+            # 1 dKH = 17.86 ppm
             curr = float(self.curr_val_var.get())
             targ = float(self.targ_val_var.get())
+            
             if self.p_var.get() == "Alkalinity" and self.alk_u_var.get() == "ppm":
-                gap_dkh = (targ - curr) / 17.86
+                gap_dkh = (targ - curr) / 17.8647
             else:
                 gap_dkh = targ - curr
 
@@ -134,18 +150,25 @@ class AquariumCommanderPro:
                 self.res_lbl.config(text="Goal Reached", fg="green")
                 return
 
-            # 3. GET BRAND STRENGTH (Strength = dKH increase per 1mL in 100L)
+            # 4. GET BRAND STRENGTH (mL to raise 100L by 1 dKH)
             p = self.p_var.get()
             prod = self.b_var.get()
+            
+            # Fritz RPM logic: 1.4 dKH increase per 1mL in 100L
             strength = float(self.custom_strength.get()) if prod == "Custom" else self.brand_data[p][prod]
             
-            # 4. MATH: (Gap * (Total Volume / 100L)) / Strength
+            # 5. FINAL CALCULATION
+            # (Gap * (Total Liters / 100L)) / Strength
+            # (4.53 * 8.327) / 1.4 * 100 = 2698.33
             dose = (gap_dkh * (vol_l / 100.0)) / strength
             
             self.res_lbl.config(text=f"Total Dose: {dose:.2f} mL", fg="#c0392b")
+            
+        except ValueError:
+            self.res_lbl.config(text="Error: Enter numbers only", fg="red")
         except Exception as e:
-            self.res_lbl.config(text="Check Inputs", fg="red")
-
+            self.res_lbl.config(text=f"Error: {str(e)}", fg="red")
+            
     def build_history(self):
         f = self.tabs["Testing & History"]
         left = ttk.Frame(f, width=400, padding=10); left.pack(side="left", fill="y")
