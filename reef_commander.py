@@ -9,7 +9,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.19.5")
+        self.root.title("Aquarium Commander Pro v0.19.6")
         self.root.geometry("1450x950")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -18,6 +18,7 @@ class AquariumCommanderPro:
         self.unit_file = "unit_config.txt"
         self.init_csv()
 
+        # Database
         self.brand_data = {
             "Alkalinity": {"Fritz RPM Liquid": 1.4, "ESV B-Ionic Part 1": 1.4, "Custom": 1.0},
             "Calcium": {"ESV B-Ionic Part 2": 20.0, "Fritz RPM Liquid": 20.0, "Custom": 1.0},
@@ -49,17 +50,19 @@ class AquariumCommanderPro:
             "Phosphate": {"target": 0.03, "low": 0.01, "high": 0.1}
         }
 
+        # Vars
         self.vol_var = tk.StringVar(value=self.load_config(self.config_file, "220"))
         self.unit_mode = tk.StringVar(value=self.load_config(self.unit_file, "Gallons"))
         self.alk_u_var = tk.StringVar(value="ppm")
         self.p_var = tk.StringVar(value="Alkalinity")
         self.b_var = tk.StringVar()
-        self.custom_strength = tk.StringVar(value="1.4")
+        self.custom_strength = tk.StringVar(value="1.0")
         self.curr_val_var = tk.StringVar(); self.targ_val_var = tk.StringVar(value="152")
         self.ph_var = tk.StringVar(); self.readout_var = tk.StringVar()
         self.t_brand_var = tk.StringVar(); self.t_param_var = tk.StringVar()
         self.m_vars = {p: tk.StringVar() for p in self.ranges.keys()}
 
+        # Tabs
         self.notebook = ttk.Notebook(root)
         self.tabs = {name: ttk.Frame(self.notebook) for name in ["Action Plan", "Maintenance", "Trends", "Testing & History"]}
         for name, frame in self.tabs.items(): self.notebook.add(frame, text=f" {name} ")
@@ -67,6 +70,10 @@ class AquariumCommanderPro:
         
         self.build_dosage(); self.build_maint(); self.build_history(); self.build_trends()
         
+        # Initializing the product dropdown content
+        self.update_product_list()
+        
+        # Traces
         self.curr_val_var.trace_add("write", lambda *a: self.smart_detect(self.curr_val_var))
         self.p_var.trace_add("write", self.update_product_list)
         self.t_param_var.trace_add("write", self.update_kits)
@@ -104,6 +111,12 @@ class AquariumCommanderPro:
         tk.Button(f, text="CALCULATE DOSAGE", command=self.calc_dose, bg="#2c3e50", fg="white", height=2, font=('Arial', 10, 'bold')).pack(fill="x", pady=10)
         self.res_lbl = tk.Label(f, text="---", font=("Arial", 16, "bold"), fg="#2980b9"); self.res_lbl.pack()
 
+    def update_product_list(self, *a):
+        brands = list(self.brand_data.get(self.p_var.get(), {}).keys())
+        self.b_cb['values'] = brands
+        if brands: self.b_cb.current(0)
+        self.toggle_custom_field()
+
     def toggle_custom_field(self, *args):
         if self.b_var.get() == "Custom": self.custom_pane.pack(side="left")
         else: self.custom_pane.pack_forget()
@@ -115,18 +128,18 @@ class AquariumCommanderPro:
             curr = float(self.curr_val_var.get())
             targ = float(self.targ_val_var.get())
             
-            # Convert gap to dKH
             gap = (targ - curr) / 17.86 if self.alk_u_var.get() == "ppm" else (targ - curr)
             
-            # Fritz logic: 1.4 dKH per 1mL in 100L
-            strength = float(self.custom_strength.get())
-            if self.b_var.get() != "Custom":
+            # Identify Strength
+            if self.b_var.get() == "Custom":
+                strength = float(self.custom_strength.get())
+            else:
                 strength = self.brand_data[self.p_var.get()][self.b_var.get()]
             
-            # The calculation that ensures volume is included:
             total_dose = (gap * liters) / (strength * 100)
             self.res_lbl.config(text=f"Total Dose: {total_dose:.2f} mL", fg="#c0392b")
-        except: self.res_lbl.config(text="Input Error", fg="red")
+        except Exception as e:
+            self.res_lbl.config(text="Input Error - Check Numbers", fg="red")
 
     def build_history(self):
         f = self.tabs["Testing & History"]
@@ -150,13 +163,13 @@ class AquariumCommanderPro:
                 r = ttk.Frame(self.step_f); r.pack(fill="x", pady=2)
                 tk.Label(r, text=txt).pack(side="left")
                 if sec > 0:
-                    btn = tk.Button(r, text=f"Start {sec}s")
+                    btn = tk.Button(r, text=f"Start {sec}s", bg="#34495e", fg="white")
                     btn.config(command=lambda b=btn, s=sec: self.run_timer(b, s))
                     btn.pack(side="right")
 
     def run_timer(self, btn, seconds):
         if seconds > 0:
-            btn.config(text=f"{seconds}s", state="disabled", bg="yellow")
+            btn.config(text=f"{seconds}s", state="disabled", bg="#f1c40f", fg="black")
             self.root.after(1000, lambda: self.run_timer(btn, seconds-1))
         else:
             btn.config(text="DONE", state="normal", bg="#2ecc71", fg="white")
@@ -186,10 +199,6 @@ class AquariumCommanderPro:
                 axes[i].set_title(p)
             FigureCanvasTkAgg(fig, master=self.t_canv).get_tk_widget().pack(fill="both", expand=True)
         except: pass
-
-    def update_product_list(self, *a):
-        brands = list(self.brand_data.get(self.p_var.get(), {}).keys())
-        self.b_cb['values'] = brands; self.b_cb.current(0)
 
     def update_kits(self, *a):
         kits = [k for k in self.test_instructions if self.t_param_var.get() in self.test_instructions[k]]
