@@ -1,80 +1,106 @@
-🌊 Aquarium Commander Pro v0.15.7
+🌊 Aquarium Commander Pro v0.20.3
+Precision Reef Management & Bio-Safety Engine
 
-Aquarium Commander Pro is a comprehensive desktop utility designed for saltwater reef hobbyists who prioritize stability. It combines chemical mathematics, biological export tracking, and predictive forecasting to help you maintain a thriving ecosystem.
+Aquarium Commander Pro is a specialized Python-based toolkit designed for advanced reef aquarists. It bridges the gap between raw test kit data and actionable chemical dosing, with a hard focus on preventing livestock stress through automated safety caps.
+🛠 Core Modules
+1. Smart Action Plan (Dosing Calculator)
 
-🚀 Core Functionality
-1. Action Plan (The Dosing Engine)
+The engine calculates precise liquid additions based on your total system volume.
 
-This tab calculates exactly how much of a specific supplement is needed to reach your target goals.
+    Bio-Safety Speed Limits: Enforces a "Maximum Daily Rise" to prevent chemical shock.
 
-    Safety Thresholds: Automatically warns you if a dose is too large to perform in a single day, suggesting a multi-day schedule instead.
+        Alkalinity: 1.4 dKH / 25 ppm per day.
 
-    pH & Fuge Logic: Dynamic input fields adjust based on the parameter. When correcting Alkalinity, it monitors pH to prevent precipitation. When correcting Nitrate, it monitors Refugium Light Hours.
+        Calcium: 25 ppm per day.
 
-    Silent Auto-Logging: Every calculation is automatically "Locked" into your history as a Dosing Event, allowing you to compare what you added vs. how the tank responded.
+        Magnesium: 100 ppm per day.
 
-2. Maintenance (The Digital Logbook)
+    pH-Informed Dosing: Automatically extends dosing schedules if high pH (>8.35) is detected to avoid carbonate precipitation.
 
-Centralized logging for all 7 major reef parameters:
+    Dynamic Target Snapping: Targets automatically reset to industry standards (Alk: 8.5, Ca: 420, Mg: 1350, PO4: 0.03) when switching parameters.
 
-    Core: Alkalinity (dKH/ppm), Calcium, Magnesium.
+2. Unit-Aware Trends
 
-    Nutrients: Nitrate, Phosphate.
+Visualization logic that adapts to your preferred testing method.
 
-    Environment: Salinity (SG), Temperature (°F).
+    Hybrid Scaling: Supports both PPM and dKH on the same graph without breaking the Y-axis.
 
-    Biological Export: A dedicated toggle to track when you harvest macroalgae, which appears as a marker on your trend graphs.
+    Visual Goal Lines: Blue dashed lines indicate your specific target set-point.
 
-3. Trends (The Stability Map)
+    Safety Zones: Green (Optimal) and Red (Danger) shading provide immediate visual context for your tank’s health.
 
-Visualizes your tank's health using a proprietary Tri-Zone color-coded graphing system:
+3. Integrated Testing Workflow
 
-    🟢 Green Zone: Your optimal target range.
+Specifically designed for Salifert and Hanna Instruments kits.
 
-    🟡 Yellow Zone: Cautionary drift.
+    Digital Timers: Built-in countdowns for reagents that require specific reaction times (e.g., Hanna Phosphorus 3-minute hold).
 
-    🔴 Red Zone: Danger—immediate correction required.
+    Checklist Mode: Step-by-step instructions to ensure testing consistency—the key to successful reefing.
 
-    Harvest Markers: Vertical orange lines indicate when nutrient export (algae trimming) occurred.
+🚀 Installation & Requirements
+Prerequisites
 
-4. History (The Audit Trail)
+    Python 3.8+
 
-A searchable, exportable database of every test result and dosing event. Entries can be deleted if a mistake is made or exported to .csv for sharing with professional reef consultants.
-🛠 How to Use
-Step 1: Configuration
+    Required Libraries:
+    Bash
 
-Enter your Tank Volume in the Action Plan tab. The app saves this automatically, so you only have to do it once.
-Step 2: Correcting a Parameter
+    pip install pandas matplotlib
 
-    Select the Correction Category (e.g., Alkalinity).
+Running the App
 
-    Choose your Brand Product or enter a Custom Strength.
+    Save the code as aquarium_commander.py.
 
-    Enter your Current Reading and Target.
+    Ensure you have write permissions in the folder (for reef_logs.csv and app_config.txt).
 
-    Click Calculate Action Plan. The app will provide the total mL needed, a daily dose breakdown, and a Projected Target Date.
+    Run via terminal:
+    Bash
 
-    Check the bottom of the window for the ✅ LOCKED TO HISTORY confirmation.
+    python aquarium_commander.py
 
-Step 3: Logging Maintenance
+🛡 Safety Protocols (The "Reefer's Guardrail")
 
-After performing your weekly water tests:
+    The Custom Zero-Point: When using a "Custom" chemical, the strength defaults to 0.0. This is a intentional safety "break" requiring the user to verify the potency before the "Calculate" button will function.
 
-    Navigate to the Maintenance tab.
+    Automatic Multi-Day Spreading: If a correction is too large to be safe in 24 hours (e.g., a 152 ppm Alkalinity gap), the app will automatically generate a 3, 4, or 5-day dosing schedule.
 
-    Enter your results. For Alkalinity, the app will auto-detect if you are using ppm or dKH based on the value.
+📋 Version History
 
-    Toggle the Harvested Macroalgae box if you pruned your refugium.
+    v0.20.3: Initial Bio-Safety Audit release. Added dynamic target snapping and custom-strength zeroing.
 
-    Click Log Test Results (Silent).
+    v0.20.2: Added Target Goal Lines and Y-axis unit labels.
 
-Step 4: Analyzing Stability
+    v0.19.0: Added Hanna Test Kit integration and digital timers.
 
-Switch to the Trends tab. Scroll through the graphs to see if your parameter lines are staying within the Green Zone. If a line enters the Red Zone, go back to the Action Plan to calculate a correction.
-💾 Technical Notes
+🧪 Troubleshooting & Chemistry Anomalies
+1. The "Precipitation" Loop (Alk/Ca Balancing)
 
-    Data Storage: All data is saved locally in reef_logs.csv in the application folder.
+If you find that dosing Alkalinity causes your Calcium to drop (or vice versa), you are likely experiencing Abiotic Precipitation.
 
-    Units: The application handles both SG (Salinity) and dKH/ppm (Alkalinity) standardizations.
+    Symptoms: White "snow" in the water, white crust on heaters/pumps, or levels that won't rise despite dosing.
 
-    Dependencies: Requires Python 3.x, tkinter, and matplotlib.
+    The Fix: Check Magnesium first. Magnesium acts as a "buffer" that prevents Calcium and Carbonate from bonding prematurely. Ensure Magnesium is 1300–1400 ppm before making large corrections to Alk/Ca.
+
+2. High pH & Alkalinity Dosing
+
+Dosing high-pH additives (like Sodium Carbonate/Soda Ash) into a tank already at pH 8.4+ can cause localized precipitation.
+
+    The App's Logic: This is why v0.20.3 automatically slows your dosing plan if you input a high pH.
+
+    Action: Dose into a high-flow area (like a return pump chamber) to ensure rapid mixing.
+
+3. Nitrate/Phosphate "Stall"
+
+When using the "Generic Carbon" or "NoPox" settings:
+
+    Redfield Ratio: Bacteria need both Nitrate and Phosphate to grow. If your Phosphate is 0.00, your Nitrate will often "stall" and refuse to drop because the bacteria are phosphate-limited.
+
+    The Fix: If Nitrate isn't moving, check if your Phosphate has hit zero. You may need to feed more or dose a tiny amount of Phosphate to get the Nitrate moving again.
+
+4. Reading Discrepancies (Hanna vs. Salifert)
+
+It is common for different kits to vary by 5–10%.
+
+    Stability > Specific Numbers: Pick one kit brand for your history logs and stick with it.
+
+    The Fix: Consistency in how you perform the test (the user journey we built into the "Testing" tab) is more important than the brand of the kit itself.
