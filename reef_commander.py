@@ -9,7 +9,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.19.8 - Audited")
+        self.root.title("Aquarium Commander Pro v0.19.9")
         self.root.geometry("1450x950")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -34,20 +34,15 @@ class AquariumCommanderPro:
                 "Magnesium": [("2ml water", 0), ("5 drops Mg-1", 0), ("1 scoop Mg-2", 0), ("Titrate Mg-3", 0)],
                 "Nitrate": [("1ml water + 4ml NO3-1", 0), ("1 scoop NO3-2", 30), ("Wait 3 mins", 180)],
                 "Phosphate": [("10ml water + 4 drops PO4-1", 0), ("1 scoop PO4-2", 10), ("Wait 5 mins", 300)]
-            },
-            "Hanna": {
-                "Alkalinity": [("10ml water (C1)", 0), ("Add 1ml Reagent", 0), ("Press Button", 0)],
-                "Phosphate": [("10ml water (C1)", 0), ("Add packet/Shake 2m", 120), ("Long Press", 180)],
-                "Nitrate": [("10ml water (C1)", 0), ("Add packet/Shake 2m", 120), ("Wait 7 mins", 420)]
             }
         }
 
         self.ranges = {
-            "Alkalinity": {"target": 8.5, "low": 7.5, "high": 9.5, "ppm_target": 152, "ppm_low": 134, "ppm_high": 170},
-            "Calcium": {"target": 420, "low": 380, "high": 460},
-            "Magnesium": {"target": 1350, "low": 1250, "high": 1450},
-            "Nitrate": {"target": 5.0, "low": 1.0, "high": 20.0},
-            "Phosphate": {"target": 0.03, "low": 0.01, "high": 0.1}
+            "Alkalinity": {"target": 8.5, "low": 7.5, "high": 9.5, "danger_low": 6.5, "danger_high": 11.0, "ppm_target": 152},
+            "Calcium": {"target": 420, "low": 380, "high": 460, "danger_low": 350, "danger_high": 500},
+            "Magnesium": {"target": 1350, "low": 1250, "high": 1450, "danger_low": 1100, "danger_high": 1600},
+            "Nitrate": {"target": 5.0, "low": 1.0, "high": 20.0, "danger_low": 0.0, "danger_high": 50.0},
+            "Phosphate": {"target": 0.03, "low": 0.01, "high": 0.1, "danger_low": 0.0, "danger_high": 0.5}
         }
 
         # Vars
@@ -61,8 +56,7 @@ class AquariumCommanderPro:
         self.targ_val_var = tk.StringVar(value="152")
         self.ph_var = tk.StringVar()
         self.readout_var = tk.StringVar()
-        self.t_brand_var = tk.StringVar()
-        self.t_param_var = tk.StringVar()
+        self.t_brand_var = tk.StringVar(); self.t_param_var = tk.StringVar()
         self.m_vars = {p: tk.StringVar() for p in self.ranges.keys()}
 
         self.notebook = ttk.Notebook(root)
@@ -70,16 +64,12 @@ class AquariumCommanderPro:
         for name, frame in self.tabs.items(): self.notebook.add(frame, text=f" {name} ")
         self.notebook.pack(expand=True, fill="both")
         
-        self.build_dosage()
-        self.build_maint()
-        self.build_history()
-        self.build_trends()
-        
-        # Initializing the product dropdown content immediately
+        self.build_dosage(); self.build_maint(); self.build_history(); self.build_trends()
         self.update_product_list()
         
         # Traces
         self.curr_val_var.trace_add("write", lambda *a: self.smart_detect(self.curr_val_var))
+        self.alk_u_var.trace_add("write", self.sync_target_units)
         self.p_var.trace_add("write", self.update_product_list)
         self.t_param_var.trace_add("write", self.update_kits)
         self.t_brand_var.trace_add("write", self.update_steps)
@@ -89,9 +79,16 @@ class AquariumCommanderPro:
         if not os.path.exists(path): return default
         with open(path, "r") as f: return f.read().strip()
 
+    def sync_target_units(self, *args):
+        """Force targets back to safe levels when switching units."""
+        if self.p_var.get() == "Alkalinity":
+            if self.alk_u_var.get() == "ppm":
+                self.targ_val_var.set("152")
+            else:
+                self.targ_val_var.set("8.5")
+
     def build_dosage(self):
         f = ttk.Frame(self.tabs["Action Plan"], padding=20); f.pack(fill="both")
-        
         r0 = ttk.LabelFrame(f, text=" 1. System Volume ", padding=10); r0.pack(fill="x", pady=5)
         tk.Entry(r0, textvariable=self.vol_var, width=10).pack(side="left", padx=5)
         ttk.Radiobutton(r0, text="Liters", variable=self.unit_mode, value="Liters").pack(side="left", padx=5)
@@ -106,7 +103,7 @@ class AquariumCommanderPro:
         self.b_cb = ttk.Combobox(r1, textvariable=self.b_var, state="readonly"); self.b_cb.pack(side="left", padx=5)
         
         self.custom_pane = ttk.Frame(r1)
-        tk.Label(self.custom_pane, text="Strength:").pack(side="left")
+        tk.Label(self.custom_pane, text="Strength (dKH/100L):").pack(side="left")
         tk.Entry(self.custom_pane, textvariable=self.custom_strength, width=8).pack(side="left")
 
         r3 = ttk.LabelFrame(f, text=" 3. Measurements ", padding=10); r3.pack(fill="x", pady=10)
@@ -115,99 +112,32 @@ class AquariumCommanderPro:
         tk.Label(r3, text="pH (Optional):").pack(side="left", padx=10); tk.Entry(r3, textvariable=self.ph_var, width=8).pack(side="left")
         
         tk.Button(f, text="CALCULATE DOSAGE", command=self.calc_dose, bg="#2c3e50", fg="white", height=2, font=('Arial', 10, 'bold')).pack(fill="x", pady=10)
-        self.res_lbl = tk.Label(f, text="---", font=("Arial", 16, "bold"), fg="#2980b9"); self.res_lbl.pack()
+        self.res_lbl = tk.Label(f, text="---", font=("Arial", 14, "bold"), fg="#2980b9", justify="center"); self.res_lbl.pack()
 
     def calc_dose(self):
         try:
-            v_val = float(self.vol_var.get())
-            liters = v_val * 3.78541 if self.unit_mode.get() == "Gallons" else v_val
+            liters = float(self.vol_var.get()) * (3.78541 if self.unit_mode.get() == "Gallons" else 1.0)
             curr = float(self.curr_val_var.get())
             targ = float(self.targ_val_var.get())
-            
-            # Gap normalized to dKH
             gap = (targ - curr) / 17.86 if (self.p_var.get() == "Alkalinity" and self.alk_u_var.get() == "ppm") else (targ - curr)
+            strength = float(self.custom_strength.get()) if self.b_var.get() == "Custom" else self.brand_data[self.p_var.get()][self.b_var.get()]
             
-            if self.b_var.get() == "Custom":
-                strength = float(self.custom_strength.get())
-            else:
-                strength = self.brand_data[self.p_var.get()][self.b_var.get()]
+            total_dose = (gap * liters) / strength
+            daily_dose = total_dose / 3
             
-            # THE CORRECTED AUDITED FORMULA
-            # Dosage (mL) = (Target_Gap * Total_Liters) / (Brand_Strength * 100)
-            # Fritz RPM adds 1.4 dKH to 100L for every 1mL.
-            total_dose = (gap * liters) / (strength)
-            self.res_lbl.config(text=f"Total Dose: {total_dose:.2f} mL", fg="#c0392b")
-        except:
-            self.res_lbl.config(text="Input Error: Verify Numbers", fg="red")
-
-    def build_history(self):
-        f = self.tabs["Testing & History"]
-        left = ttk.Frame(f, width=450, padding=10); left.pack(side="left", fill="y")
-        ttk.Combobox(left, textvariable=self.t_param_var, values=list(self.ranges.keys()), state="readonly").pack(fill="x", pady=5)
-        self.kit_cb = ttk.Combobox(left, textvariable=self.t_brand_var, state="readonly"); self.kit_cb.pack(fill="x", pady=5)
-        
-        self.step_f = ttk.LabelFrame(left, text=" Instruction Checklist ", padding=10)
-        self.step_f.pack(fill="both", expand=True, pady=10)
-        
-        res_f = ttk.Frame(left); res_f.pack(fill="x")
-        tk.Entry(res_f, textvariable=self.readout_var).pack(side="left", fill="x", expand=True)
-        tk.Button(res_f, text="LOG", command=self.save_hist, bg="green", fg="white").pack(side="right")
-
-        right = ttk.Frame(f, padding=10); right.pack(side="right", fill="both", expand=True)
-        self.tree = ttk.Treeview(right, columns=("T", "P", "V"), show="headings")
-        for c, h in [("T", "Time"), ("P", "Param"), ("V", "Value")]: self.tree.heading(c, text=h)
-        self.tree.pack(fill="both", expand=True)
-        self.tree.bind("<Button-3>", self.show_context_menu)
-        self.refresh_history_table()
-
-    def update_steps(self, *a):
-        for w in self.step_f.winfo_children(): w.destroy()
-        brand, p = self.t_brand_var.get(), self.t_param_var.get()
-        if brand in self.test_instructions and p in self.test_instructions[brand]:
-            for txt, sec in self.test_instructions[brand][p]:
-                r = ttk.Frame(self.step_f); r.pack(fill="x", pady=2)
-                # Restored Checklist feature
-                tk.Checkbutton(r, text=txt).pack(side="left")
-                if sec > 0:
-                    btn = tk.Button(r, text=f"Start {sec}s", bg="#34495e", fg="white")
-                    btn.config(command=lambda b=btn, s=sec: self.run_timer(b, s))
-                    btn.pack(side="right")
-
-    def run_timer(self, btn, seconds):
-        if seconds > 0:
-            btn.config(text=f"{seconds}s", state="disabled", bg="#f1c40f", fg="black")
-            self.root.after(1000, lambda: self.run_timer(btn, seconds-1))
-        else:
-            btn.config(text="DONE", state="normal", bg="#2ecc71", fg="white")
-
-    def show_context_menu(self, e):
-        row = self.tree.identify_row(e.y)
-        if row:
-            self.tree.selection_set(row)
-            m = tk.Menu(self.root, tearoff=0)
-            m.add_command(label="Delete Entry", command=self.delete_entry)
-            m.post(e.x_root, e.y_root)
-
-    def delete_entry(self):
-        sel = self.tree.item(self.tree.selection())['values']
-        df = pd.read_csv(self.log_file)
-        df = df[~((df['Timestamp'] == str(sel[0])) & (df['Parameter'] == str(sel[1])))]
-        df.to_csv(self.log_file, index=False)
-        self.refresh_all()
-
-    def update_product_list(self, *a):
-        p = self.p_var.get()
-        brands = list(self.brand_data.get(p, {}).keys())
-        self.b_cb['values'] = brands
-        if brands: self.b_cb.current(0)
-        self.toggle_custom_ui()
-
-    def toggle_custom_ui(self, *args):
-        if self.b_var.get() == "Custom": self.custom_pane.pack(side="left", padx=10)
-        else: self.custom_pane.pack_forget()
+            res_txt = f"Total Dose: {total_dose:.2f} mL\n"
+            res_txt += f"Plan: Dose {daily_dose:.2f} mL daily for 3 days to maintain stability."
+            self.res_lbl.config(text=res_txt, fg="#c0392b")
+        except: self.res_lbl.config(text="Input Error", fg="red")
 
     def build_maint(self):
         f = ttk.Frame(self.tabs["Maintenance"], padding=20); f.pack(fill="both")
+        # Restored toggle for maintenance
+        u_f = ttk.Frame(f); u_f.pack(fill="x")
+        tk.Label(u_f, text="Alk Unit:").pack(side="left")
+        ttk.Radiobutton(u_f, text="dKH", variable=self.alk_u_var, value="dKH").pack(side="left")
+        ttk.Radiobutton(u_f, text="PPM", variable=self.alk_u_var, value="ppm").pack(side="left")
+        
         for p in self.ranges.keys():
             r = ttk.Frame(f); r.pack(fill="x", pady=2)
             tk.Label(r, text=p, width=15).pack(side="left")
@@ -228,19 +158,74 @@ class AquariumCommanderPro:
             for i, (p, r) in enumerate(self.ranges.items()):
                 subset = df[df['Parameter'] == p].sort_values('Timestamp')
                 if subset.empty: continue
-                axes[i].plot(subset['Timestamp'], subset['Value'], marker='o', color='black')
-                axes[i].axhspan(r['low'], r['high'], color='green', alpha=0.15)
-                axes[i].axhline(r['target'], color='red', linestyle='--', alpha=0.5)
-                axes[i].set_title(p)
+                ax = axes[i]
+                ax.plot(subset['Timestamp'], subset['Value'], marker='o', color='black', linewidth=1.5)
+                # Visual Zones
+                ax.axhspan(r['low'], r['high'], color='#2ecc71', alpha=0.2, label="Optimal") # Green
+                ax.axhspan(r['danger_low'], r['low'], color='#f1c40f', alpha=0.1) # Yellow Low
+                ax.axhspan(r['high'], r['danger_high'], color='#f1c40f', alpha=0.1) # Yellow High
+                ax.axhline(r['target'], color='red', linestyle='--', alpha=0.6)
+                ax.set_title(f"{p} Trend")
             FigureCanvasTkAgg(fig, master=self.t_canv).get_tk_widget().pack(fill="both", expand=True)
         except: pass
 
+    def build_history(self):
+        f = self.tabs["Testing & History"]
+        left = ttk.Frame(f, width=450, padding=10); left.pack(side="left", fill="y")
+        ttk.Combobox(left, textvariable=self.t_param_var, values=list(self.ranges.keys()), state="readonly").pack(fill="x", pady=5)
+        self.kit_cb = ttk.Combobox(left, textvariable=self.t_brand_var, state="readonly"); self.kit_cb.pack(fill="x", pady=5)
+        self.step_f = ttk.LabelFrame(left, text=" Checklist ", padding=10); self.step_f.pack(fill="both", expand=True, pady=10)
+        res_f = ttk.Frame(left); res_f.pack(fill="x")
+        tk.Entry(res_f, textvariable=self.readout_var).pack(side="left", fill="x", expand=True)
+        tk.Button(res_f, text="LOG", command=self.save_hist, bg="green", fg="white").pack(side="right")
+        right = ttk.Frame(f, padding=10); right.pack(side="right", fill="both", expand=True)
+        self.tree = ttk.Treeview(right, columns=("T", "P", "V"), show="headings")
+        for c, h in [("T", "Time"), ("P", "Param"), ("V", "Value")]: self.tree.heading(c, text=h)
+        self.tree.pack(fill="both", expand=True); self.tree.bind("<Button-3>", self.show_context_menu); self.refresh_history_table()
+
+    def update_steps(self, *a):
+        for w in self.step_f.winfo_children(): w.destroy()
+        brand, p = self.t_brand_var.get(), self.t_param_var.get()
+        if brand in self.test_instructions and p in self.test_instructions[brand]:
+            for txt, sec in self.test_instructions[brand][p]:
+                r = ttk.Frame(self.step_f); r.pack(fill="x", pady=2)
+                tk.Checkbutton(r, text=txt).pack(side="left")
+                if sec > 0:
+                    btn = tk.Button(r, text=f"Start {sec}s", command=lambda b=None, s=sec, rb=r: self.run_timer(rb, s))
+                    btn.pack(side="right")
+
+    def run_timer(self, parent, seconds):
+        btn = parent.winfo_children()[-1]
+        if seconds > 0:
+            btn.config(text=f"{seconds}s", state="disabled", bg="#f1c40f")
+            self.root.after(1000, lambda: self.run_timer(parent, seconds-1))
+        else: btn.config(text="DONE", state="normal", bg="#2ecc71", fg="white")
+
+    def show_context_menu(self, e):
+        row = self.tree.identify_row(e.y)
+        if row:
+            self.tree.selection_set(row)
+            m = tk.Menu(self.root, tearoff=0); m.add_command(label="Delete", command=self.delete_entry); m.post(e.x_root, e.y_root)
+
+    def delete_entry(self):
+        sel = self.tree.item(self.tree.selection())['values']
+        df = pd.read_csv(self.log_file)
+        df = df[~((df['Timestamp'] == str(sel[0])) & (df['Parameter'] == str(sel[1])))]
+        df.to_csv(self.log_file, index=False); self.refresh_all()
+
+    def update_product_list(self, *a):
+        brands = list(self.brand_data.get(self.p_var.get(), {}).keys())
+        self.b_cb['values'] = brands
+        if brands: self.b_cb.current(0)
+        self.toggle_custom_ui()
+
+    def toggle_custom_ui(self, *args):
+        if self.b_var.get() == "Custom": self.custom_pane.pack(side="left", padx=10)
+        else: self.custom_pane.pack_forget()
+
     def update_kits(self, *a):
-        p = self.t_param_var.get()
-        kits = [k for k in self.test_instructions if p in self.test_instructions[k]]
-        self.kit_cb['values'] = kits
-        if kits: self.kit_cb.current(0)
-        else: self.kit_cb.set("")
+        kits = [k for k in self.test_instructions if self.t_param_var.get() in self.test_instructions[k]]
+        self.kit_cb['values'] = kits; self.kit_cb.current(0) if kits else self.kit_cb.set("")
 
     def smart_detect(self, var):
         try:
@@ -260,7 +245,7 @@ class AquariumCommanderPro:
             w = csv.writer(f); ts = datetime.now().strftime("%Y-%m-%d %H:%M")
             for p, v in self.m_vars.items():
                 if v.get(): w.writerow([ts, p, v.get(), ""])
-        self.refresh_all(); messagebox.showinfo("Saved", "Logs updated.")
+        self.refresh_all()
 
     def refresh_history_table(self):
         for i in self.tree.get_children(): self.tree.delete(i)
