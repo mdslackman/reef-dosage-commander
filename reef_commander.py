@@ -9,7 +9,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.20.0 - Bio-Safety Edition")
+        self.root.title("Aquarium Commander Pro v0.20.2 - Target Goal Edition")
         self.root.geometry("1450x950")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -36,17 +36,16 @@ class AquariumCommanderPro:
             "Hanna": {
                 "Alkalinity": [("10ml water (C1)", 0), ("Add 1ml Reagent", 0), ("Press Button", 0)],
                 "Phosphate": [("10ml water (C1)", 0), ("Add packet/Shake 2m", 120), ("Hold for 3m Timer", 180)],
-                "Nitrate": [("10ml water (C1)", 0), ("Add packet/Shake 2m", 120), ("Wait for 7m Timer", 420)],
-                "Calcium": [("0.1ml tank water + Deionized water", 0), ("Add Reagent A/B", 0), ("Read result", 0)]
+                "Nitrate": [("10ml water (C1)", 0), ("Add packet/Shake 2m", 120), ("Wait for 7m Timer", 420)]
             }
         }
 
         self.ranges = {
-            "Alkalinity": {"target": 8.5, "low": 7.5, "high": 9.5, "danger_low": 6.5, "danger_high": 11.0, "max_daily": 1.4},
-            "Calcium": {"target": 420, "low": 380, "high": 460, "danger_low": 350, "danger_high": 500, "max_daily": 25.0},
-            "Magnesium": {"target": 1350, "low": 1250, "high": 1450, "danger_low": 1100, "danger_high": 1600, "max_daily": 100.0},
-            "Nitrate": {"target": 5.0, "low": 1.0, "high": 20.0, "danger_low": 0.0, "danger_high": 50.0, "max_daily": 5.0},
-            "Phosphate": {"target": 0.03, "low": 0.01, "high": 0.1, "danger_low": 0.0, "danger_high": 0.5, "max_daily": 0.02}
+            "Alkalinity": {"target": 8.5, "low": 7.5, "high": 9.5, "danger_low": 6.5, "danger_high": 11.0, "max_daily": 1.4, "unit": "dKH", "ppm_target": 152},
+            "Calcium": {"target": 420, "low": 380, "high": 460, "danger_low": 350, "danger_high": 500, "max_daily": 25.0, "unit": "ppm"},
+            "Magnesium": {"target": 1350, "low": 1250, "high": 1450, "danger_low": 1100, "danger_high": 1600, "max_daily": 100.0, "unit": "ppm"},
+            "Nitrate": {"target": 5.0, "low": 1.0, "high": 20.0, "danger_low": 0.0, "danger_high": 50.0, "max_daily": 5.0, "unit": "ppm"},
+            "Phosphate": {"target": 0.03, "low": 0.01, "high": 0.1, "danger_low": 0.0, "danger_high": 0.5, "max_daily": 0.02, "unit": "ppm"}
         }
 
         # Vars
@@ -54,14 +53,10 @@ class AquariumCommanderPro:
         self.unit_mode = tk.StringVar(value=self.load_config(self.unit_file, "Gallons"))
         self.alk_u_var = tk.StringVar(value="ppm")
         self.p_var = tk.StringVar(value="Alkalinity")
-        self.b_var = tk.StringVar()
-        self.custom_strength = tk.StringVar(value="1.4")
-        self.curr_val_var = tk.StringVar()
-        self.targ_val_var = tk.StringVar(value="152")
-        self.ph_var = tk.StringVar()
-        self.readout_var = tk.StringVar()
-        self.t_brand_var = tk.StringVar()
-        self.t_param_var = tk.StringVar()
+        self.b_var = tk.StringVar(); self.custom_strength = tk.StringVar(value="1.4")
+        self.curr_val_var = tk.StringVar(); self.targ_val_var = tk.StringVar(value="152")
+        self.ph_var = tk.StringVar(); self.readout_var = tk.StringVar()
+        self.t_brand_var = tk.StringVar(); self.t_param_var = tk.StringVar()
         self.m_vars = {p: tk.StringVar() for p in self.ranges.keys()}
 
         self.notebook = ttk.Notebook(root)
@@ -70,9 +65,9 @@ class AquariumCommanderPro:
         self.notebook.pack(expand=True, fill="both")
         
         self.build_dosage(); self.build_maint(); self.build_history(); self.build_trends()
-        
-        # Initialize
         self.update_product_list()
+        
+        # Observers
         self.curr_val_var.trace_add("write", lambda *a: self.smart_detect(self.curr_val_var))
         self.p_var.trace_add("write", self.update_product_list)
         self.t_param_var.trace_add("write", self.update_kits)
@@ -85,7 +80,6 @@ class AquariumCommanderPro:
 
     def build_dosage(self):
         f = ttk.Frame(self.tabs["Action Plan"], padding=20); f.pack(fill="both")
-        
         r0 = ttk.LabelFrame(f, text=" 1. System Volume ", padding=10); r0.pack(fill="x", pady=5)
         tk.Entry(r0, textvariable=self.vol_var, width=10).pack(side="left", padx=5)
         ttk.Radiobutton(r0, text="Liters", variable=self.unit_mode, value="Liters").pack(side="left", padx=5)
@@ -105,9 +99,9 @@ class AquariumCommanderPro:
         r3 = ttk.LabelFrame(f, text=" 3. Measurements ", padding=10); r3.pack(fill="x", pady=10)
         tk.Label(r3, text="Current:").pack(side="left"); tk.Entry(r3, textvariable=self.curr_val_var, width=10).pack(side="left", padx=5)
         tk.Label(r3, text="Target:").pack(side="left"); tk.Entry(r3, textvariable=self.targ_val_var, width=10).pack(side="left", padx=5)
-        tk.Label(r3, text="pH (Optional):").pack(side="left", padx=10); tk.Entry(r3, textvariable=self.ph_var, width=8).pack(side="left")
+        tk.Label(r3, text="pH (Opt):").pack(side="left", padx=10); tk.Entry(r3, textvariable=self.ph_var, width=8).pack(side="left")
         
-        tk.Button(f, text="GENERATE SAFETY-AUDITED DOSING PLAN", command=self.calc_dose, bg="#2c3e50", fg="white", height=2, font=('Arial', 10, 'bold')).pack(fill="x", pady=10)
+        tk.Button(f, text="CALCULATE ACTION PLAN", command=self.calc_dose, bg="#2c3e50", fg="white", font=('Arial', 10, 'bold')).pack(fill="x", pady=10)
         self.res_lbl = tk.Label(f, text="---", font=("Arial", 12, "bold"), fg="#2980b9", justify="left"); self.res_lbl.pack()
 
     def sync_target(self):
@@ -116,36 +110,23 @@ class AquariumCommanderPro:
 
     def calc_dose(self):
         try:
-            vol_l = float(self.vol_var.get()) * (3.78541 if self.unit_mode.get() == "Gallons" else 1.0)
-            curr = float(self.curr_val_var.get())
-            targ = float(self.targ_val_var.get())
+            liters = float(self.vol_var.get()) * (3.78541 if self.unit_mode.get() == "Gallons" else 1.0)
+            curr = float(self.curr_val_var.get()); targ = float(self.targ_val_var.get())
             param = self.p_var.get()
             
-            # Convert gap to dKH for math if Alkalinity
             gap = (targ - curr) / 17.86 if (param == "Alkalinity" and self.alk_u_var.get() == "ppm") else (targ - curr)
             strength = float(self.custom_strength.get()) if self.b_var.get() == "Custom" else self.brand_data[param][self.b_var.get()]
             
-            total_ml = (gap * vol_l) / strength
-            
-            # Bio-Safety Logic
+            total_ml = (gap * liters) / strength
             max_d = self.ranges[param]["max_daily"]
-            days_req = max(1, abs(gap) / max_d)
-            if self.ph_var.get() and float(self.ph_var.get()) > 8.35 and param == "Alkalinity":
-                days_req *= 1.5 # Extra caution for high pH
+            days = max(1, abs(gap) / max_d)
+            if self.ph_var.get() and float(self.ph_var.get()) > 8.35 and param == "Alkalinity": days *= 1.5
             
-            days_req = int(days_req) + (1 if days_req % 1 > 0 else 0)
-            daily_ml = total_ml / days_req
+            days = int(days) + (1 if days % 1 > 0 else 0)
+            daily_ml = total_ml / days
             
-            res = f">>> ANALYSIS FOR {vol_l:.1f}L SYSTEM <<<\n"
-            res += f"Total Correction Needed: {total_ml:.2f} mL\n"
-            res += f"SAFETY LIMIT: Max {max_d} change/day.\n"
-            res += f"ACTION PLAN: Dose {daily_ml:.2f} mL per day for {days_req} day(s)."
-            
-            if days_req > 1:
-                self.res_lbl.config(text=res, fg="#e67e22")
-            else:
-                self.res_lbl.config(text=res, fg="#27ae60")
-        except: self.res_lbl.config(text="Input Error: Verify all numeric fields.", fg="red")
+            self.res_lbl.config(text=f"Total: {total_ml:.1f} mL\nPlan: {daily_ml:.1f} mL/day for {days} days.", fg="#27ae60")
+        except: self.res_lbl.config(text="Input Error", fg="red")
 
     def build_maint(self):
         f = ttk.Frame(self.tabs["Maintenance"], padding=20); f.pack(fill="both")
@@ -156,7 +137,7 @@ class AquariumCommanderPro:
             if p == "Alkalinity":
                 ttk.Radiobutton(r, text="ppm", variable=self.alk_u_var, value="ppm").pack(side="left", padx=2)
                 ttk.Radiobutton(r, text="dKH", variable=self.alk_u_var, value="dKH").pack(side="left", padx=2)
-        tk.Button(f, text="LOG ALL TO HISTORY", command=self.save_maint, bg="green", fg="white").pack(fill="x", pady=20)
+        tk.Button(f, text="LOG ALL", command=self.save_maint, bg="green", fg="white").pack(fill="x", pady=20)
 
     def build_trends(self):
         f = self.tabs["Trends"]; self.t_canv = ttk.Frame(f); self.t_canv.pack(fill="both", expand=True)
@@ -165,19 +146,36 @@ class AquariumCommanderPro:
     def refresh_graphs(self):
         for w in self.t_canv.winfo_children(): w.destroy()
         try:
-            df = pd.read_csv(self.log_file)
-            if df.empty: return
-            df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+            df = pd.read_csv(self.log_file); df['Timestamp'] = pd.to_datetime(df['Timestamp'])
             fig, axes = plt.subplots(len(self.ranges), 1, figsize=(8, 14), constrained_layout=True)
             for i, (p, r) in enumerate(self.ranges.items()):
                 subset = df[df['Parameter'] == p].sort_values('Timestamp')
                 ax = axes[i]
-                if not subset.empty: ax.plot(subset['Timestamp'], subset['Value'], marker='o', color='black')
-                ax.axhspan(r['low'], r['high'], color='green', alpha=0.15) # Optimal
-                ax.axhspan(r['danger_low'], r['low'], color='red', alpha=0.05) # Danger Low
-                ax.axhspan(r['high'], r['danger_high'], color='red', alpha=0.05) # Danger High
-                ax.axhline(r['target'], color='blue', linestyle='--', alpha=0.4)
-                ax.set_title(p)
+                
+                # Determine Unit for labeling and scaling
+                current_unit = r['unit']
+                target_val = r['target']
+                if p == "Alkalinity" and not subset.empty:
+                    if subset.iloc[-1]['Value'] > 25:
+                        current_unit = "ppm"
+                        target_val = r['ppm_target']
+                    else:
+                        current_unit = "dKH"
+                        target_val = r['target']
+                
+                if not subset.empty: ax.plot(subset['Timestamp'], subset['Value'], marker='o', color='black', label='Reading')
+                
+                # Safety zones scaling
+                low, high = (r['low'] * 17.86, r['high'] * 17.86) if current_unit == "ppm" and p == "Alkalinity" else (r['low'], r['high'])
+                
+                ax.axhspan(low, high, color='green', alpha=0.15, label='Optimal Range')
+                # NEW: TARGET GOAL LINE
+                ax.axhline(target_val, color='blue', linestyle='--', alpha=0.8, label=f'Goal ({target_val})')
+                
+                ax.set_ylabel(current_unit, fontweight='bold')
+                ax.set_title(f"{p} ({current_unit})")
+                ax.legend(loc='upper right', fontsize='x-small')
+                
             FigureCanvasTkAgg(fig, master=self.t_canv).get_tk_widget().pack(fill="both", expand=True)
         except: pass
 
@@ -186,7 +184,7 @@ class AquariumCommanderPro:
         left = ttk.Frame(f, width=450, padding=10); left.pack(side="left", fill="y")
         ttk.Combobox(left, textvariable=self.t_param_var, values=list(self.ranges.keys()), state="readonly").pack(fill="x", pady=5)
         self.kit_cb = ttk.Combobox(left, textvariable=self.t_brand_var, state="readonly"); self.kit_cb.pack(fill="x", pady=5)
-        self.step_f = ttk.LabelFrame(left, text=" Test Workflow ", padding=10); self.step_f.pack(fill="both", expand=True, pady=10)
+        self.step_f = ttk.LabelFrame(left, text=" Workflow ", padding=10); self.step_f.pack(fill="both", expand=True, pady=10)
         res_f = ttk.Frame(left); res_f.pack(fill="x")
         tk.Entry(res_f, textvariable=self.readout_var).pack(side="left", fill="x", expand=True)
         tk.Button(res_f, text="LOG", command=self.save_hist, bg="green", fg="white").pack(side="right")
@@ -245,7 +243,7 @@ class AquariumCommanderPro:
             w = csv.writer(f); ts = datetime.now().strftime("%Y-%m-%d %H:%M")
             for p, v in self.m_vars.items():
                 if v.get(): w.writerow([ts, p, v.get(), ""])
-        self.refresh_all(); messagebox.showinfo("Success", "All maintenance logs saved.")
+        self.refresh_all(); messagebox.showinfo("Logged", "Maintenance data saved.")
 
     def show_context_menu(self, e):
         row = self.tree.identify_row(e.y)
