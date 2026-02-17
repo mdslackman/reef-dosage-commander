@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox
 import csv, os, sys
 import pandas as pd
 from datetime import datetime
@@ -9,7 +9,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 class AquariumCommanderPro:
     def __init__(self, root):
         self.root = root
-        self.root.title("Aquarium Commander Pro v0.19.3")
+        self.root.title("Aquarium Commander Pro v0.19.4")
         self.root.geometry("1450x950")
         self.root.protocol("WM_DELETE_WINDOW", self.hard_exit)
         
@@ -18,6 +18,7 @@ class AquariumCommanderPro:
         self.unit_file = "unit_config.txt"
         self.init_csv()
 
+        # Database
         self.brand_data = {
             "Alkalinity": {"Fritz RPM Liquid": 1.4, "ESV B-Ionic Part 1": 1.4, "Custom": 1.0},
             "Calcium": {"ESV B-Ionic Part 2": 20.0, "Fritz RPM Liquid": 20.0, "Custom": 1.0},
@@ -49,20 +50,24 @@ class AquariumCommanderPro:
             "Phosphate": {"target": 0.03, "low": 0.01, "high": 0.1}
         }
 
+        # Persistent Variables
         self.vol_var = tk.StringVar(value=self.load_config(self.config_file, "220"))
         self.unit_mode = tk.StringVar(value=self.load_config(self.unit_file, "Gallons"))
+        self.alk_u_var = tk.StringVar(value="ppm") # Default to PPM as per your setup
+        
+        # UI Variables
         self.p_var = tk.StringVar(value="Alkalinity")
-        self.alk_u_var = tk.StringVar(value="dKH")
         self.b_var = tk.StringVar()
         self.custom_strength = tk.StringVar(value="1.0")
         self.curr_val_var = tk.StringVar()
-        self.targ_val_var = tk.StringVar(value="8.5")
+        self.targ_val_var = tk.StringVar(value="152")
         self.ph_var = tk.StringVar()
         self.readout_var = tk.StringVar()
         self.t_brand_var = tk.StringVar()
         self.t_param_var = tk.StringVar()
         self.m_vars = {p: tk.StringVar() for p in self.ranges.keys()}
 
+        # Notebook
         self.notebook = ttk.Notebook(root)
         self.tabs = {name: ttk.Frame(self.notebook) for name in ["Action Plan", "Maintenance", "Trends", "Testing & History"]}
         for name, frame in self.tabs.items(): self.notebook.add(frame, text=f" {name} ")
@@ -70,6 +75,7 @@ class AquariumCommanderPro:
         
         self.build_dosage(); self.build_maint(); self.build_history(); self.build_trends()
         
+        # Traces
         self.curr_val_var.trace_add("write", lambda *a: self.smart_detect(self.curr_val_var))
         self.alk_u_var.trace_add("write", self.sync_targets)
         self.p_var.trace_add("write", self.update_product_list)
@@ -82,6 +88,7 @@ class AquariumCommanderPro:
 
     def build_dosage(self):
         f = ttk.Frame(self.tabs["Action Plan"], padding=20); f.pack(fill="both")
+        
         r0 = ttk.LabelFrame(f, text=" 1. System Volume ", padding=10); r0.pack(fill="x", pady=5)
         tk.Entry(r0, textvariable=self.vol_var, width=10).pack(side="left", padx=5)
         ttk.Radiobutton(r0, text="Liters", variable=self.unit_mode, value="Liters").pack(side="left", padx=5)
@@ -90,10 +97,12 @@ class AquariumCommanderPro:
         r1 = ttk.LabelFrame(f, text=" 2. Parameter & Product ", padding=10); r1.pack(fill="x", pady=5)
         tk.Label(r1, text="Chemical:").pack(side="left")
         ttk.Combobox(r1, textvariable=self.p_var, values=list(self.ranges.keys()), state="readonly").pack(side="left", padx=5)
+        
         self.alk_u_pane = ttk.Frame(r1)
         ttk.Radiobutton(self.alk_u_pane, text="dKH", variable=self.alk_u_var, value="dKH").pack(side="left")
         ttk.Radiobutton(self.alk_u_pane, text="PPM", variable=self.alk_u_var, value="ppm").pack(side="left")
         self.alk_u_pane.pack(side="left", padx=10)
+        
         tk.Label(r1, text="Product:").pack(side="left")
         self.b_cb = ttk.Combobox(r1, textvariable=self.b_var, state="readonly"); self.b_cb.pack(side="left", padx=5)
         self.custom_pane = ttk.Frame(r1); tk.Label(self.custom_pane, text="Strength:").pack(side="left")
@@ -103,28 +112,46 @@ class AquariumCommanderPro:
         r3 = ttk.LabelFrame(f, text=" 3. Measurements ", padding=10); r3.pack(fill="x", pady=10)
         tk.Label(r3, text="Current:").pack(side="left"); tk.Entry(r3, textvariable=self.curr_val_var, width=10).pack(side="left", padx=5)
         tk.Label(r3, text="Target:").pack(side="left"); tk.Entry(r3, textvariable=self.targ_val_var, width=10).pack(side="left", padx=5)
+        tk.Label(r3, text="pH (Optional):").pack(side="left", padx=10); tk.Entry(r3, textvariable=self.ph_var, width=8).pack(side="left")
         
         tk.Button(f, text="CALCULATE DOSAGE", command=self.calc_dose, bg="#2c3e50", fg="white", height=2, font=('Arial', 10, 'bold')).pack(fill="x", pady=10)
         self.res_lbl = tk.Label(f, text="---", font=("Arial", 16, "bold"), fg="#2980b9"); self.res_lbl.pack()
 
     def calc_dose(self):
         try:
+            # FORCE LITERS CALCULATION
             v_raw = float(self.vol_var.get())
-            # FORCE UNIT CONVERSION
             vol_l = v_raw * 3.78541 if self.unit_mode.get() == "Gallons" else v_raw
             
+            # FORCE dKH GAP CALCULATION
             curr = float(self.curr_val_var.get())
             targ = float(self.targ_val_var.get())
             if self.p_var.get() == "Alkalinity" and self.alk_u_var.get() == "ppm":
-                gap_dkh = (targ - curr) / 17.8647
+                gap_dkh = (targ - curr) / 17.86
             else:
                 gap_dkh = targ - curr
             
             strength = float(self.custom_strength.get()) if self.b_var.get() == "Custom" else self.brand_data[self.p_var.get()][self.b_var.get()]
-            # Formula: (Gap * (Vol / 100)) / Strength
+            
+            # RESULT: (Gap * (Liters / 100)) / Strength
             dose = (gap_dkh * (vol_l / 100.0)) / strength
             self.res_lbl.config(text=f"Total Dose: {dose:.2f} mL", fg="#c0392b")
-        except: self.res_lbl.config(text="Check Inputs", fg="red")
+        except: self.res_lbl.config(text="Error: Check Numbers", fg="red")
+
+    def build_maint(self):
+        f = ttk.Frame(self.tabs["Maintenance"], padding=20); f.pack(fill="both")
+        
+        # Unit switcher for Alkalinity in Maintenance
+        unit_f = ttk.Frame(f); unit_f.pack(fill="x", pady=5)
+        tk.Label(unit_f, text="Alk Unit:").pack(side="left")
+        ttk.Radiobutton(unit_f, text="dKH", variable=self.alk_u_var, value="dKH").pack(side="left", padx=5)
+        ttk.Radiobutton(unit_f, text="PPM", variable=self.alk_u_var, value="ppm").pack(side="left", padx=5)
+
+        for p in self.ranges.keys():
+            r = ttk.Frame(f); r.pack(fill="x", pady=2)
+            tk.Label(r, text=p, width=15).pack(side="left")
+            tk.Entry(r, textvariable=self.m_vars[p]).pack(side="left", fill="x", expand=True)
+        tk.Button(f, text="LOG ALL TO HISTORY", command=self.save_maint, bg="green", fg="white").pack(fill="x", pady=10)
 
     def build_history(self):
         f = self.tabs["Testing & History"]
@@ -144,14 +171,7 @@ class AquariumCommanderPro:
         self.tree = ttk.Treeview(right, columns=("T", "P", "V"), show="headings")
         for c, h in [("T", "Time"), ("P", "Param"), ("V", "Value")]: self.tree.heading(c, text=h)
         self.tree.pack(fill="both", expand=True)
-        self.tree.bind("<Button-3>", self.show_context_menu)
         self.refresh_history_table()
-
-    def update_kits(self, *a):
-        p = self.t_param_var.get()
-        kits = [k for k in self.test_instructions if p in self.test_instructions[k]]
-        self.kit_cb['values'] = kits
-        if kits: self.kit_cb.current(0)
 
     def update_steps(self, *a):
         for w in self.step_f.winfo_children(): w.destroy()
@@ -161,13 +181,17 @@ class AquariumCommanderPro:
                 r = ttk.Frame(self.step_f); r.pack(fill="x", pady=2)
                 tk.Checkbutton(r, text=txt).pack(side="left")
                 if sec > 0:
-                    btn = tk.Button(r, text=f"⏲ {sec}s", command=lambda b=None, s=sec: self.run_timer(s))
+                    btn = tk.Button(r, text=f"Start {sec}s")
+                    btn.config(command=lambda b=btn, s=sec: self.run_timer(b, s))
                     btn.pack(side="right")
 
-    def run_timer(self, seconds):
+    def run_timer(self, btn, seconds):
         if seconds > 0:
-            self.root.after(1000, lambda: self.run_timer(seconds-1))
-        else: messagebox.showinfo("Timer", "Step Complete!")
+            btn.config(text=f"{seconds}s", state="disabled", bg="yellow")
+            self.root.after(1000, lambda: self.run_timer(btn, seconds-1))
+        else:
+            btn.config(text="DONE", state="normal", bg="lightgreen")
+            messagebox.showinfo("Timer", "Time is up!")
 
     def build_trends(self):
         f = self.tabs["Trends"]
@@ -191,25 +215,28 @@ class AquariumCommanderPro:
                 low, high = (r['ppm_low'], r['ppm_high']) if is_ppm else (r['low'], r['high'])
                 
                 axes[i].plot(subset['Timestamp'], subset['Value'], marker='o', color='black')
-                axes[i].axhspan(low, high, color='green', alpha=0.15) # RESTORED GREEN ZONE
-                axes[i].axhline(target, color='red', linestyle='--', alpha=0.5) # RESTORED TARGET LINE
-                axes[i].set_title(f"{p} ({'PPM' if is_ppm else 'dKH'})")
+                axes[i].axhspan(low, high, color='green', alpha=0.15)
+                axes[i].axhline(target, color='red', linestyle='--', alpha=0.5)
+                axes[i].set_title(f"{p}")
             FigureCanvasTkAgg(fig, master=self.t_canv).get_tk_widget().pack(fill="both", expand=True)
         except: pass
 
-    def build_maint(self):
-        f = ttk.Frame(self.tabs["Maintenance"], padding=20); f.pack(fill="both")
-        for p in self.ranges.keys():
-            r = ttk.Frame(f); r.pack(fill="x", pady=2)
-            tk.Label(r, text=p, width=15).pack(side="left")
-            tk.Entry(r, textvariable=self.m_vars[p]).pack(side="left", fill="x", expand=True)
-        tk.Button(f, text="LOG ALL", command=self.save_maint, bg="green", fg="white").pack(fill="x", pady=10)
-
+    # Helpers
     def update_product_list(self, *a):
         p = self.p_var.get()
         brands = list(self.brand_data.get(p, {}).keys())
         self.b_cb['values'] = brands
         if brands: self.b_cb.current(0)
+
+    def update_kits(self, *a):
+        p = self.t_param_var.get()
+        kits = [k for k in self.test_instructions if p in self.test_instructions[k]]
+        self.kit_cb['values'] = kits
+        if kits: self.kit_cb.current(0)
+
+    def sync_targets(self, *args):
+        if self.p_var.get() == "Alkalinity":
+            self.targ_val_var.set("152" if self.alk_u_var.get() == "ppm" else "8.5")
 
     def smart_detect(self, var):
         try:
@@ -217,23 +244,6 @@ class AquariumCommanderPro:
             if v > 30 and self.alk_u_var.get() == "dKH": self.alk_u_var.set("ppm")
             elif 0 < v < 20 and self.alk_u_var.get() == "ppm": self.alk_u_var.set("dKH")
         except: pass
-
-    def sync_targets(self, *args):
-        if self.p_var.get() == "Alkalinity":
-            self.targ_val_var.set("152" if self.alk_u_var.get() == "ppm" else "8.5")
-
-    def show_context_menu(self, e):
-        i = self.tree.identify_row(e.y)
-        if i:
-            self.tree.selection_set(i)
-            m = tk.Menu(self.root, tearoff=0)
-            m.add_command(label="Delete", command=self.delete_entry); m.post(e.x_root, e.y_root)
-
-    def delete_entry(self):
-        s = self.tree.item(self.tree.selection())['values']
-        df = pd.read_csv(self.log_file)
-        df = df[~((df['Timestamp'] == s[0]) & (df['Parameter'] == s[1]))]
-        df.to_csv(self.log_file, index=False); self.refresh_all()
 
     def save_hist(self):
         if self.readout_var.get():
