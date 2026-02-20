@@ -1,106 +1,74 @@
-🌊 Aquarium Commander Pro v0.20.3
-Precision Reef Management & Bio-Safety Engine
+🌿 Reefer Madness v0.20.7
+Advanced Reef Stability & Consumption Analytics
 
-Aquarium Commander Pro is a specialized Python-based toolkit designed for advanced reef aquarists. It bridges the gap between raw test kit data and actionable chemical dosing, with a hard focus on preventing livestock stress through automated safety caps.
-🛠 Core Modules
-1. Smart Action Plan (Dosing Calculator)
+Reefer Madness is a toolkit allowing you to test, log and track chemical consumption of reef saltwater aquarium - covering alkylinity, calcium, magnesium, nitrate, and phosphate. For chemicals reefers want to does, we provide a dosage calculator as well as an "action plan" calculator (used to rapidly and safely adjust your levels during crises (i.e. all of your corals dying from low alkylinity).
 
-The engine calculates precise liquid additions based on your total system volume.
+This is a solo project for my own use, but please flag issues or ideas if you find the app helpful. This code was made using Gemini - I am not a software engineer but needed a calculator like this, so here we are.
 
-    Bio-Safety Speed Limits: Enforces a "Maximum Daily Rise" to prevent chemical shock.
+✨ New in v0.20.7
 
-        Alkalinity: 1.4 dKH / 25 ppm per day.
+    Persistent Data Core: All logs, system configurations, and unit preferences are now saved to Documents/ReeferMadness/. Your data is now independent of the application file location.
 
-        Calcium: 25 ppm per day.
+    Consumption Tracker: A new maintenance module that calculates exactly how much your corals are "eating" over a multi-day period.
 
-        Magnesium: 100 ppm per day.
+    Live Dosing Status: The header bar now displays your current required daily maintenance dose at all times.
 
-    pH-Informed Dosing: Automatically extends dosing schedules if high pH (>8.35) is detected to avoid carbonate precipitation.
+    Smart Unit Normalization: Seamlessly handles PPM (Hanna) and dKH (Standard) inputs, normalizing them for precise dosing plan generation.
 
-    Dynamic Target Snapping: Targets automatically reset to industry standards (Alk: 8.5, Ca: 420, Mg: 1350, PO4: 0.03) when switching parameters.
+🚀 Core Modules
+1. The Consumption Engine (Maintenance Tab)
 
-2. Unit-Aware Trends
+Instead of guessing your daily dose, Reefer Madness calculates it based on real-world uptake.
 
-Visualization logic that adapts to your preferred testing method.
+    Input: Test results from two different days and the time elapsed.
 
-    Hybrid Scaling: Supports both PPM and dKH on the same graph without breaking the Y-axis.
+    Output: Precise daily "Drop" rate and the exact mL per day required to maintain stability.
 
-    Visual Goal Lines: Blue dashed lines indicate your specific target set-point.
+    Safety: Automatically pulls product strength from your active selection in the Action Plan.
 
-    Safety Zones: Green (Optimal) and Red (Danger) shading provide immediate visual context for your tank’s health.
+2. The Bio-Safety Action Plan (Correction Tab)
 
-3. Integrated Testing Workflow
+When parameters swing, the Action Plan calculates a path back to the target without shocking the system.
 
-Specifically designed for Salifert and Hanna Instruments kits.
+    Automatic Multi-Day Stretching: If a correction exceeds the Maximum Daily Rise (e.g., 1.4 dKH for Alkalinity), the app automatically divides the dose over several days.
 
-    Digital Timers: Built-in countdowns for reagents that require specific reaction times (e.g., Hanna Phosphorus 3-minute hold).
+    Product Precision: Pre-configured for Fritz RPM, ESV B-Ionic, and Carbon Dosing (NoPox), with a "Custom" mode for DIY solutions.
 
-    Checklist Mode: Step-by-step instructions to ensure testing consistency—the key to successful reefing.
+3. Visual Stability Trends (Trends Tab)
 
-🚀 Installation & Requirements
-Prerequisites
+Data is only useful if it's readable. The trends module provides high-fidelity graphing.
+
+    Adaptive Y-Axis: Automatically switches scales if it detects PPM-range data for Alkalinity.
+
+    Target Overlays: Every graph features a blue dashed "Goal Line" based on your specific system targets.
+
+🛠 Installation & Technical Details
+Folder Structure
+
+Upon first run, the app creates the following in your Documents folder:
+
+    reef_logs.csv: Your entire testing history.
+
+    app_config.txt: Remembers your system volume (e.g., 220 Gallons).
+
+    unit_config.txt: Remembers your preference for Gallons vs. Liters.
+
+Requirements
 
     Python 3.8+
 
-    Required Libraries:
-    Bash
+    Libraries: pandas, matplotlib, tkinter
 
-    pip install pandas matplotlib
+🧪 Troubleshooting: The "Redfield" & "Precipitation" Guards
 
-Running the App
+    Precipitation Alert: If Alkalinity and Calcium are both dropping despite dosing, check your Magnesium levels in the Trends tab. Magnesium must be >1250 ppm to prevent abiotic precipitation.
 
-    Save the code as aquarium_commander.py.
-
-    Ensure you have write permissions in the folder (for reef_logs.csv and app_config.txt).
-
-    Run via terminal:
-    Bash
-
-    python aquarium_commander.py
-
-🛡 Safety Protocols (The "Reefer's Guardrail")
-
-    The Custom Zero-Point: When using a "Custom" chemical, the strength defaults to 0.0. This is a intentional safety "break" requiring the user to verify the potency before the "Calculate" button will function.
-
-    Automatic Multi-Day Spreading: If a correction is too large to be safe in 24 hours (e.g., a 152 ppm Alkalinity gap), the app will automatically generate a 3, 4, or 5-day dosing schedule.
+    Nitrate Stalling: If dosing Carbon (NoPox/Vinegar) and Nitrate isn't dropping, check Phosphate. Bacteria require a trace of Phosphate to process Nitrate.
 
 📋 Version History
 
-    v0.20.3: Initial Bio-Safety Audit release. Added dynamic target snapping and custom-strength zeroing.
+    v0.20.7: Renamed to Reefer Madness. Migrated data to Documents folder. Added persistent Header Status.
 
-    v0.20.2: Added Target Goal Lines and Y-axis unit labels.
+    v0.20.6: Integrated Consumption Tracker and automated Maintenance Dose logic.
 
-    v0.19.0: Added Hanna Test Kit integration and digital timers.
-
-🧪 Troubleshooting & Chemistry Anomalies
-1. The "Precipitation" Loop (Alk/Ca Balancing)
-
-If you find that dosing Alkalinity causes your Calcium to drop (or vice versa), you are likely experiencing Abiotic Precipitation.
-
-    Symptoms: White "snow" in the water, white crust on heaters/pumps, or levels that won't rise despite dosing.
-
-    The Fix: Check Magnesium first. Magnesium acts as a "buffer" that prevents Calcium and Carbonate from bonding prematurely. Ensure Magnesium is 1300–1400 ppm before making large corrections to Alk/Ca.
-
-2. High pH & Alkalinity Dosing
-
-Dosing high-pH additives (like Sodium Carbonate/Soda Ash) into a tank already at pH 8.4+ can cause localized precipitation.
-
-    The App's Logic: This is why v0.20.3 automatically slows your dosing plan if you input a high pH.
-
-    Action: Dose into a high-flow area (like a return pump chamber) to ensure rapid mixing.
-
-3. Nitrate/Phosphate "Stall"
-
-When using the "Generic Carbon" or "NoPox" settings:
-
-    Redfield Ratio: Bacteria need both Nitrate and Phosphate to grow. If your Phosphate is 0.00, your Nitrate will often "stall" and refuse to drop because the bacteria are phosphate-limited.
-
-    The Fix: If Nitrate isn't moving, check if your Phosphate has hit zero. You may need to feed more or dose a tiny amount of Phosphate to get the Nitrate moving again.
-
-4. Reading Discrepancies (Hanna vs. Salifert)
-
-It is common for different kits to vary by 5–10%.
-
-    Stability > Specific Numbers: Pick one kit brand for your history logs and stick with it.
-
-    The Fix: Consistency in how you perform the test (the user journey we built into the "Testing" tab) is more important than the brand of the kit itself.
+    v0.20.0: Initial Bio-Safety engine release with Max-Daily-Rise caps.
