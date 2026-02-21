@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-import csv, os
+import csv, os, sqlite3
 import pandas as pd
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
@@ -37,6 +37,9 @@ class ReeferMadness:
 
         self.log_file = os.path.join(os.path.expanduser("~/Documents/ReeferMadness"), "reef_pro_v24.csv")
         if not os.path.exists(os.path.dirname(self.log_file)): os.makedirs(os.path.dirname(self.log_file))
+        # SQLite DB path (migration target). Keep CSV path for compatibility/migration.
+        self.db_path = os.path.join(os.path.expanduser("~/Documents/ReeferMadness"), "reef_pro_v24.db")
+        self.init_db()
 
         # Variables
         self.vol_v = tk.StringVar(value="220"); self.u_mode = tk.StringVar(value="Gallons")
@@ -186,8 +189,14 @@ class ReeferMadness:
         self.check_f = ttk.Frame(ref); self.check_f.pack(fill="x", pady=10)
         
         # History Table with Delete
-        self.tree = ttk.Treeview(f, columns=("T", "P", "V"), show="headings")
-        for c in ("T", "P", "V"): self.tree.heading(c, text=c)
+        # Include ID column (hidden) so deletions can target DB rows reliably
+        self.tree = ttk.Treeview(f, columns=("ID", "T", "P", "V"), show="headings")
+        self.tree.heading("ID", text="ID")
+        self.tree.heading("T", text="T")
+        self.tree.heading("P", text="P")
+        self.tree.heading("V", text="V")
+        # Hide ID from display
+        self.tree['displaycolumns'] = ("T", "P", "V")
         self.tree.pack(fill="both", expand=True, padx=20)
         tk.Button(f, text="DELETE SELECTED ROW", command=self.delete_row, bg="#c0392b", fg="white").pack(pady=10)
         self.sync_history_kits()
@@ -258,15 +267,19 @@ class ReeferMadness:
 
     def save_entry(self):
         try:
-            with open(self.log_file, "a", newline="") as f:
-                w = csv.writer(f); ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-                for p, v in self.log_vars.items():
-                    if v.get():
-                        val = float(v.get())
-                        if p == "Alkalinity" and self.log_alk_unit.get() == "dKH": val *= 17.86
-                        w.writerow([ts, p, val]); v.set("")
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+            for p, v in self.log_vars.items():
+                if v.get():
+                    val = float(v.get())
+                    if p == "Alkalinity" and self.log_alk_unit.get() == "dKH": val *= 17.86
+                    cur.execute('INSERT INTO logs (ts, parameter, value) VALUES (?, ?, ?)', (ts, p, val))
+                    v.set("")
+            conn.commit(); conn.close()
             self.refresh_history(); messagebox.showinfo("Saved", "Logged.")
-        except: pass
+        except Exception:
+            messagebox.showerror("Error", "Could not save entry. Check inputs and DB.")
 
     def build_trends(self):
         f = self.tabs["Trends"]
@@ -275,8 +288,13 @@ class ReeferMadness:
 
     def draw_graphs(self):
         for w in self.chart_f.winfo_children(): w.destroy()
-        if not os.path.exists(self.log_file) or os.stat(self.log_file).st_size < 10: return
-        df = pd.read_csv(self.log_file, names=["T", "P", "V"]); df['T'] = pd.to_datetime(df['T'])
+        if not os.path.exists(self.db_path): return
+        conn = sqlite3.connect(self.db_path)
+        try:
+            df = pd.read_sql_query('SELECT ts as T, parameter as P, value as V FROM logs', conn, parse_dates=["T"]) 
+        except Exception:
+            conn.close(); return
+        conn.close()
         fig, axes = plt.subplots(5, 1, figsize=(8, 14), constrained_layout=True)
         for i, p in enumerate(self.db.keys()):
             sub = df[df['P'] == p].sort_values('T')
@@ -288,19 +306,40 @@ class ReeferMadness:
 
     def refresh_history(self):
         for i in self.tree.get_children(): self.tree.delete(i)
-        if os.path.exists(self.log_file):
-            with open(self.log_file, "r") as f:
-                for r in csv.reader(f): self.tree.insert("", "end", values=r)
+        if not os.path.exists(self.db_path): return
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        try:
+            rows = cur.execute('SELECT id, ts, parameter, value FROM logs ORDER BY ts').fetchall()
+            for r in rows: self.tree.insert("", "end", values=r)
+        finally:
+            conn.close()
 
     def delete_row(self):
         sel = self.tree.selection()
         if not sel: return
-        rows = []
-        with open(self.log_file, "r") as f: rows = list(csv.reader(f))
         val = self.tree.item(sel[0])['values']
-        rows = [r for r in rows if not (r[0] == str(val[0]) and r[1] == val[1])]
-        with open(self.log_file, "w", newline="") as f: csv.writer(f).writerows(rows)
+        try:
+            row_id = int(val[0])
+            conn = sqlite3.connect(self.db_path)
+            conn.execute('DELETE FROM logs WHERE id = ?', (row_id,))
+            conn.commit(); conn.close()
+        except Exception:
+            pass
         self.refresh_history()
+
+    def init_db(self):
+        # Ensure DB directory exists and create logs table
+        if not os.path.exists(os.path.dirname(self.db_path)):
+            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        conn = sqlite3.connect(self.db_path)
+        conn.execute('''CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY,
+            ts TEXT,
+            parameter TEXT,
+            value REAL
+        )''')
+        conn.commit(); conn.close()
 
 if __name__ == "__main__":
     root = tk.Tk(); app = ReeferMadness(root); root.mainloop()
