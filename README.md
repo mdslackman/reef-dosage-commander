@@ -1,7 +1,7 @@
 🌿 Reefer Madness v0.20.7
 Advanced Reef Stability & Consumption Analytics
 
-Reefer Madness is a toolkit allowing you to test, log and track chemical consumption of reef saltwater aquarium - covering alkylinity, calcium, magnesium, nitrate, and phosphate. For chemicals reefers want to does, we provide a dosage calculator as well as an "action plan" calculator (used to rapidly and safely adjust your levels during crises (i.e. all of your corals dying from low alkylinity).
+Reefer Madness is a toolkit allowing you to test, log and track chemical consumption of reef saltwater aquarium - covering alkylinity, calcium, magnesium, nitrate, and phosphate. For chemicals reefers want to dose, there's a daily dosage calculator and "action plan" calculator (used to rapidly and safely adjust your levels during crises - i.e. all of your corals dying from low alkylinity). You can track measurements overtime with logging and graphs,
 
 This is a solo project for my own use, but please flag issues or ideas if you find the app helpful. This code was made using Gemini - I am not a software engineer but needed a calculator like this, so here we are.
 
